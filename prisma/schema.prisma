@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserPlan {
+  FREE
+  PREMIUM
+}
+
+enum SummaryStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id      String   @id @default(cuid())
+  email   String   @unique
+  name    String?
+  avatar  String?
+  plan    UserPlan @default(FREE)
+  credits Int      @default(3)
+
+  // Supabase integration
+  supabaseId String? @unique
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
+  // Email verification
+  emailVerified Boolean @default(false)
+
+  summaries     Summary[]
+  refreshTokens RefreshToken[]
+  // LinkedIn and Website features disabled - can be re-enabled via feature flags
+  // linkedinPosts    LinkedinPost[]
+  // websiteSummaries WebsiteSummary[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Summary {
+  id          String        @id @default(cuid())
+  title       String
+  keyPoints   String[]      @default([])
+  fullSummary String
+  tags        String[]      @default([])
+  status      SummaryStatus @default(PENDING)
+
+  // Video metadata
+  videoId       String
+  videoTitle    String
+  channelName   String
+  videoDuration String?
+  videoUrl      String
+  thumbnailUrl  String?
+
+  // Transcript data
+  transcript     Json? // Store original transcript segments
+  transcriptText String? // Flattened transcript for AI processing
+
+  // User relation
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Indexes for performance
+  @@index([userId])
+  @@index([videoId])
+  @@index([createdAt])
+  @@map("summaries")
+}
+
+// Website feature disabled - can be re-enabled via feature flags
+// model WebsiteSummary {
+//   id          String   @id @default(cuid())
+//   title       String
+//   content     String   @db.Text // Store full article content
+//   summary     String   @db.Text // AI-generated summary
+//   url         String
+//   websiteName String   // e.g., "Medium", "Dev.to"
+//   faviconUrl  String?  // Optional favicon URL
+//
+//   // User relation
+//   userId String
+//   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+//
+//   // Timestamps
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+//
+//   // Indexes for performance
+//   @@index([userId])
+//   @@index([url])
+//   @@unique([userId, url]) // Prevent duplicate summaries for same URL by same user
+//   @@map("website_summaries")
+// }
+
+// LinkedIn feature disabled - can be re-enabled via feature flags
+// model LinkedinPost {
+//   id             String   @id @default(cuid())
+//   title          String?
+//   content        String
+//   author         String
+//   postUrl        String
+//   linkedinPostId String?
+//   platform       String   @default("linkedin")
+//   engagement     Json? // Store likes, comments, shares
+//   metadata       Json? // Store additional metadata
+//   savedAt        DateTime @default(now())
+//
+//   // User relation
+//   userId String
+//   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+//
+//   // Timestamps
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+//
+//   @@unique([userId, postUrl]) // Prevent duplicate saves
+//   // Indexes
+//   @@index([userId])
+//   @@index([savedAt])
+//   @@index([platform])
+//   @@map("linkedin_posts")
+// }
+
+model VideoMetadata {
+  id           String    @id @default(cuid())
+  videoId      String    @unique
+  title        String
+  channelName  String
+  duration     String?
+  thumbnailUrl String?
+  description  String?
+  publishedAt  DateTime?
+  viewCount    Int?
+  likeCount    Int?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("video_metadata")
+}
+
+model ApiUsage {
+  id        String  @id @default(cuid())
+  userId    String
+  endpoint  String
+  method    String
+  userAgent String?
+  ipAddress String?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("api_usage")
+}
