@@ -13,7 +13,6 @@ A production-ready backend API for Knugget AI - an AI-powered YouTube video summ
 - **Monitoring**: Structured logging, health checks, performance monitoring
 
 ## 🛠️ Tech Stack
-
 - **Runtime**: Node.js 18+, TypeScript
 - **Framework**: Express.js
 - **Database**: Supabase PostgreSQL with Prisma ORM
