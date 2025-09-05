@@ -36,9 +36,9 @@ app.use(
 
       const allowedOrigins = [
         "http://localhost:8000",
-        "https://knugget-new-client.vercel.app",
+        "https://knugget-youtube-client.vercel.app",
         "chrome-extension://",
-        "https://knugget-new-backend.onrender.com",
+        "https://knugget-youtube-backend.onrender.com",
       ];
 
       // Check if origin is in allowed list or is chrome-extension

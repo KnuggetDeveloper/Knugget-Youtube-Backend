@@ -42,7 +42,7 @@ const configSchema = z.object({
   ALLOWED_ORIGINS: z
     .string()
     .default(
-      "http://localhost:8000,https://knugget-new-client.vercel.app,chrome-extension://,https://knugget-new-backend.onrender.com"
+      "http://localhost:8000,https://knugget-youtube-client.vercel.app,chrome-extension://,https://knugget-youtube-backend.onrender.com"
     ),
 
   // Logging
@@ -55,8 +55,14 @@ const configSchema = z.object({
   PREMIUM_PLAN_MONTHLY_CREDITS: z.string().transform(Number).default("1000"),
 
   // Feature Flags (for future re-enablement)
-  ENABLE_LINKEDIN: z.string().transform(val => val === "true").default("false"),
-  ENABLE_WEBSITE: z.string().transform(val => val === "true").default("false"),
+  ENABLE_LINKEDIN: z
+    .string()
+    .transform((val) => val === "true")
+    .default("false"),
+  ENABLE_WEBSITE: z
+    .string()
+    .transform((val) => val === "true")
+    .default("false"),
 });
 
 const parsed = configSchema.safeParse(process.env);
