@@ -13,6 +13,7 @@ A production-ready backend API for Knugget AI - an AI-powered YouTube video summ
 - **Monitoring**: Structured logging, health checks, performance monitoring
 
 ## 🛠️ Tech Stack
+
 - **Runtime**: Node.js 18+, TypeScript
 - **Framework**: Express.js
 - **Database**: Supabase PostgreSQL with Prisma ORM
@@ -64,6 +65,7 @@ backend/
 ## 🗄️ Database Schema
 
 ### Core Models
+
 - **User**: Authentication, plan management, credits
 - **Summary**: AI-generated summaries with metadata
 - **RefreshToken**: Secure token management
@@ -73,6 +75,7 @@ backend/
 ## 📡 API Endpoints
 
 ### Authentication (`/api/auth`)
+
 ```
 POST   /register          # User registration
 POST   /login             # User login
@@ -85,6 +88,7 @@ POST   /verify-email      # Email verification
 ```
 
 ### Summaries (`/api/summary`)
+
 ```
 POST   /generate          # Generate AI summary
 POST   /save              # Save summary
@@ -97,6 +101,7 @@ GET    /stats             # Summary statistics
 ```
 
 ### User Management (`/api/user`)
+
 ```
 GET    /profile           # Get user profile
 PUT    /profile           # Update profile
@@ -110,6 +115,7 @@ DELETE /account           # Delete account
 ## 🚦 Getting Started
 
 ### Prerequisites
+
 - Node.js 18+
 - PostgreSQL (Supabase recommended)
 - OpenAI API key
@@ -117,6 +123,7 @@ DELETE /account           # Delete account
 ### Installation
 
 1. **Clone and install dependencies**
+
 ```bash
 git clone <repository>
 cd knugget-backend
@@ -124,12 +131,14 @@ npm install
 ```
 
 2. **Set up environment variables**
+
 ```bash
 cp .env.example .env
 # Edit .env with your configuration
 ```
 
 3. **Set up database**
+
 ```bash
 # Generate Prisma client
 npm run db:generate
@@ -142,6 +151,7 @@ npm run db:migrate
 ```
 
 4. **Start development server**
+
 ```bash
 npm run dev
 ```
@@ -182,6 +192,7 @@ The OpenAI service handles intelligent transcript processing:
 - **Error Handling**: Robust error handling with credit refunds on failures
 
 ### Example AI Response Format
+
 ```json
 {
   "keyPoints": [
@@ -228,12 +239,14 @@ Intelligent rate limiting based on user plans:
 ## 📈 Production Deployment
 
 ### Build and Start
+
 ```bash
 npm run build
 npm start
 ```
 
 ### Environment Considerations
+
 - Set `NODE_ENV=production`
 - Configure proper database URLs
 - Set up monitoring and logging
@@ -241,6 +254,7 @@ npm start
 - Set up automated backups
 
 ### Health Checks
+
 ```bash
 GET /api/health
 # Returns service status and connectivity

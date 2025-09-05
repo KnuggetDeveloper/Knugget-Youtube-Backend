@@ -54,13 +54,19 @@ app.use(
       }
 
       // Log unauthorized origin attempts
-      logger.warn('CORS blocked origin:', { origin });
+      logger.warn("CORS blocked origin:", { origin });
 
       callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+      "Origin",
+    ],
     exposedHeaders: ["Content-Range", "X-Content-Range"],
     maxAge: 86400, // 24 hours
   })
@@ -80,8 +86,10 @@ app.use(
     },
     skip: (req) => {
       // Skip logging for health checks in production
-      return config.server.nodeEnv === 'production' && req.url === '/api/health';
-    }
+      return (
+        config.server.nodeEnv === "production" && req.url === "/api/health"
+      );
+    },
   })
 );
 
@@ -97,11 +105,19 @@ app.use("/api", routes);
 // ADDITIONAL DEBUG: List all registered routes at startup
 app._router?.stack?.forEach((middleware: any) => {
   if (middleware.route) {
-    console.log(`📍 Route: ${Object.keys(middleware.route.methods).join(', ').toUpperCase()} ${middleware.route.path}`);
-  } else if (middleware.name === 'router') {
+    console.log(
+      `📍 Route: ${Object.keys(middleware.route.methods)
+        .join(", ")
+        .toUpperCase()} ${middleware.route.path}`
+    );
+  } else if (middleware.name === "router") {
     middleware.handle?.stack?.forEach((handler: any) => {
       if (handler.route) {
-        console.log(`📍 Nested Route: ${Object.keys(handler.route.methods).join(', ').toUpperCase()} ${handler.route.path}`);
+        console.log(
+          `📍 Nested Route: ${Object.keys(handler.route.methods)
+            .join(", ")
+            .toUpperCase()} ${handler.route.path}`
+        );
       }
     });
   }
@@ -152,17 +168,19 @@ const startServer = async () => {
     logger.info("Database connected successfully");
 
     const server = app.listen(process.env.PORT || 3000, () => {
-      logger.info(`🚀 Knugget API server running on port ${process.env.PORT || 3000}`);
+      logger.info(
+        `🚀 Knugget API server running on port ${process.env.PORT || 3000}`
+      );
       logger.info(`📡 Environment: ${config.server.nodeEnv}`);
       logger.info(`🔗 API Base URL: ${config.server.apiBaseUrl}`);
-      logger.info(`🌐 CORS Origins: ${config.cors.allowedOrigins.join(', ')}`);
-      
+      logger.info(`🌐 CORS Origins: ${config.cors.allowedOrigins.join(", ")}`);
+
       // CRITICAL: Log all available routes at startup
-      console.log('\n📋 Available API Routes:');
-      console.log('├── /api/health');
-      console.log('├── /api/auth/*');
-      console.log('├── /api/summary/*');
-      console.log('├── /api/user/*');
+      console.log("\n📋 Available API Routes:");
+      console.log("├── /api/health");
+      console.log("├── /api/auth/*");
+      console.log("├── /api/summary/*");
+      console.log("├── /api/user/*");
       // console.log('└── /api/linkedin/*'); // This should appear!
     });
 
