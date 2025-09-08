@@ -17,7 +17,7 @@ import {
 } from "../types";
 
 export class SummaryService {
-  // Generate AI summary from transcript
+  // Generate AI summary from transcript (without auto-saving)
   async generateSummary(
     userId: string,
     data: GenerateSummaryRequest
@@ -53,82 +53,52 @@ export class SummaryService {
         };
       }
 
-      // Create pending summary record
-      const pendingSummary = await prisma.summary.create({
-        data: {
-          title: data.videoMetadata.title,
-          keyPoints: [],
-          fullSummary: "",
-          tags: [],
-          status: "PROCESSING",
-          videoId: data.videoMetadata.videoId,
-          videoTitle: data.videoMetadata.title,
-          channelName: data.videoMetadata.channelName,
-          videoDuration: data.videoMetadata.duration,
-          videoUrl: data.videoMetadata.url,
-          thumbnailUrl: data.videoMetadata.thumbnailUrl,
-          transcript: data.transcript as any,
-          transcriptText: this.formatTranscriptText(data.transcript),
-          userId,
-        },
-      });
+      // Generate summary using OpenAI without saving to database
+      const aiResult = await openaiService.generateSummary(
+        data.transcript,
+        data.videoMetadata
+      );
 
-      // Deduct credits immediately
-      await prisma.user.update({
-        where: { id: userId },
-        data: { credits: { decrement: config.credits.perSummary } },
-      });
-
-      try {
-        // Generate summary using OpenAI
-        const aiResult = await openaiService.generateSummary(
-          data.transcript,
-          data.videoMetadata
+      if (!aiResult.success || !aiResult.data) {
+        throw new AppError(
+          aiResult.error || "AI summary generation failed",
+          500
         );
-
-        if (!aiResult.success || !aiResult.data) {
-          throw new AppError(
-            aiResult.error || "AI summary generation failed",
-            500
-          );
-        }
-
-        // Update summary with AI results
-        const completedSummary = await prisma.summary.update({
-          where: { id: pendingSummary.id },
-          data: {
-            keyPoints: aiResult.data.keyPoints,
-            fullSummary: aiResult.data.fullSummary,
-            tags: aiResult.data.tags,
-            status: "COMPLETED",
-          },
-        });
-
-        logger.info("Summary generated successfully", {
-          userId,
-          summaryId: completedSummary.id,
-          videoId: data.videoMetadata.videoId,
-        });
-
-        return {
-          success: true,
-          data: this.formatSummary(completedSummary),
-        };
-      } catch (aiError) {
-        // Mark summary as failed and refund credits
-        await prisma.$transaction([
-          prisma.summary.update({
-            where: { id: pendingSummary.id },
-            data: { status: "FAILED" },
-          }),
-          prisma.user.update({
-            where: { id: userId },
-            data: { credits: { increment: config.credits.perSummary } },
-          }),
-        ]);
-
-        throw aiError;
       }
+
+      // Return generated summary data without saving to database
+      const summaryData: SummaryData = {
+        id: "", // Empty ID indicates this hasn't been saved yet
+        title: data.videoMetadata.title,
+        keyPoints: aiResult.data.keyPoints,
+        fullSummary: aiResult.data.fullSummary,
+        tags: aiResult.data.tags,
+        status: "COMPLETED",
+        videoId: data.videoMetadata.videoId,
+        videoTitle: data.videoMetadata.title,
+        channelName: data.videoMetadata.channelName,
+        videoDuration: data.videoMetadata.duration,
+        videoUrl: data.videoMetadata.url,
+        thumbnailUrl: data.videoMetadata.thumbnailUrl,
+        transcript: data.transcript as any,
+        transcriptText: this.formatTranscriptText(data.transcript),
+        userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isUnsaved: true, // Flag to indicate this summary hasn't been saved
+      };
+
+      logger.info("Summary generated successfully (not saved)", {
+        userId,
+        videoId: data.videoMetadata.videoId,
+        keyPointsCount: aiResult.data.keyPoints.length,
+        tagsCount: aiResult.data.tags.length,
+      });
+
+      return {
+        success: true,
+        data: summaryData,
+      };
     } catch (error) {
       logger.error("Summary generation failed", {
         error: error instanceof Error ? error.message : "Unknown error",
@@ -148,8 +118,9 @@ export class SummaryService {
   ): Promise<ServiceResponse<SummaryData>> {
     try {
       let summary;
+      let shouldDeductCredits = false;
 
-      if (summaryData.id) {
+      if (summaryData.id && summaryData.id !== "") {
         // Update existing summary
         summary = await prisma.summary.findFirst({
           where: {
@@ -172,13 +143,46 @@ export class SummaryService {
           },
         });
       } else {
-        // Create new summary
+        // Create new summary - this is when we deduct credits
         if (
           !summaryData.videoId ||
           !summaryData.videoTitle ||
           !summaryData.channelName
         ) {
           throw new AppError("Missing required video metadata", 400);
+        }
+
+        // Check if user has enough credits
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { credits: true, plan: true },
+        });
+
+        if (!user) {
+          throw new AppError("User not found", 404);
+        }
+
+        if (user.credits < config.credits.perSummary) {
+          throw new AppError("Insufficient credits", 402);
+        }
+
+        shouldDeductCredits = true;
+
+        // Check if summary already exists for this video
+        const existingSummary = await prisma.summary.findFirst({
+          where: {
+            userId,
+            videoId: summaryData.videoId,
+            status: "COMPLETED",
+          },
+        });
+
+        if (existingSummary) {
+          // Return existing summary without deducting credits
+          return {
+            success: true,
+            data: this.formatSummary(existingSummary),
+          };
         }
 
         summary = await prisma.summary.create({
@@ -201,6 +205,14 @@ export class SummaryService {
             userId,
           },
         });
+
+        // Deduct credits after successful save
+        if (shouldDeductCredits) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: { credits: { decrement: config.credits.perSummary } },
+          });
+        }
       }
 
       logger.info("Summary saved successfully", {
@@ -250,11 +262,11 @@ export class SummaryService {
         ...(videoId && { videoId }),
         ...(startDate &&
           endDate && {
-          createdAt: {
-            gte: new Date(startDate),
-            lte: new Date(endDate),
-          },
-        }),
+            createdAt: {
+              gte: new Date(startDate),
+              lte: new Date(endDate),
+            },
+          }),
         ...(search && {
           OR: [
             { title: { contains: search, mode: "insensitive" } },
@@ -506,19 +518,17 @@ export class SummaryService {
       fullSummary: summary.fullSummary,
       tags: summary.tags,
       status: summary.status,
-      videoMetadata: {
-        videoId: summary.videoId,
-        title: summary.videoTitle,
-        channelName: summary.channelName,
-        duration: summary.videoDuration,
-        url: summary.videoUrl,
-        thumbnailUrl: summary.thumbnailUrl,
-      },
+      videoId: summary.videoId,
+      videoTitle: summary.videoTitle,
+      channelName: summary.channelName,
+      videoDuration: summary.videoDuration,
+      videoUrl: summary.videoUrl,
+      thumbnailUrl: summary.thumbnailUrl,
       transcript: summary.transcript as TranscriptSegment[],
       transcriptText: summary.transcriptText,
-      createdAt: summary.createdAt.toISOString(),
-      updatedAt: summary.updatedAt.toISOString(),
-      saved: true,
+      userId: summary.userId,
+      createdAt: summary.createdAt,
+      updatedAt: summary.updatedAt,
     };
   }
 
@@ -583,11 +593,11 @@ export class SummaryService {
       const averageSummaryLength =
         completedSummariesForAvg.length > 0
           ? Math.round(
-            completedSummariesForAvg.reduce(
-              (sum, s) => sum + s.fullSummary.length,
-              0
-            ) / completedSummariesForAvg.length
-          )
+              completedSummariesForAvg.reduce(
+                (sum, s) => sum + s.fullSummary.length,
+                0
+              ) / completedSummariesForAvg.length
+            )
           : 0;
 
       return {

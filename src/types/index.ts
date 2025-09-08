@@ -80,18 +80,24 @@ export interface VideoMetadata {
 }
 
 export interface SummaryData {
-  id?: string;
+  id: string;
   title: string;
   keyPoints: string[];
   fullSummary: string;
   tags: string[];
   status: SummaryStatus;
-  videoMetadata: VideoMetadata;
+  videoId: string;
+  videoTitle: string;
+  channelName: string;
+  videoDuration?: string;
+  videoUrl: string;
+  thumbnailUrl?: string;
   transcript?: TranscriptSegment[];
   transcriptText?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  saved?: boolean;
+  userId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  isUnsaved?: boolean; // Flag to indicate if summary hasn't been saved to database yet
 }
 
 export interface GenerateSummaryRequest {
@@ -122,7 +128,7 @@ export interface UserStats {
   totalSummaries: number;
   // LinkedIn and Website stats - disabled but kept for future re-enablement
   // totalLinkedinPosts: number;
-  // totalWebsiteSummaries: number; 
+  // totalWebsiteSummaries: number;
   summariesThisMonth: number;
   // linkedinPostsThisMonth: number;
   // websiteSummariesThisMonth: number;
@@ -262,7 +268,6 @@ export {
   RefreshToken,
   VideoMetadata as PrismaVideoMetadata,
 } from "@prisma/client";
-
 
 // LinkedIn and Website types - disabled but kept for future re-enablement
 // Feature flags can re-enable these types when needed
