@@ -141,38 +141,56 @@ export class OpenAIService {
 
       // Process each chunk
       for (let i = 0; i < chunks.length; i++) {
-        const chunkText = this.formatTranscriptForAI(chunks[i]);
-        const chunkPrompt = this.createChunkSummaryPrompt(
-          chunkText,
-          i + 1,
-          chunks.length
-        );
+        try {
+          const chunkText = this.formatTranscriptForAI(chunks[i]);
+          const chunkPrompt = this.createChunkSummaryPrompt(
+            chunkText,
+            i + 1,
+            chunks.length
+          );
 
-        const completion = await this.client.chat.completions.create({
-          model: config.openai.model,
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are an AI assistant that creates concise summaries of video transcript chunks.",
-            },
-            {
-              role: "user",
-              content: chunkPrompt,
-            },
-          ],
-          max_tokens: 500,
-          temperature: 0.3,
-        });
+          logger.info("Processing chunk", {
+            chunkIndex: i + 1,
+            totalChunks: chunks.length,
+            chunkLength: chunkText.length,
+          });
 
-        const chunkSummary = completion.choices[0]?.message?.content;
-        if (chunkSummary) {
-          chunkSummaries.push(chunkSummary);
-        }
+          const completion = await this.client.chat.completions.create({
+            model: config.openai.model,
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are an AI assistant that creates concise summaries of video transcript chunks.",
+              },
+              {
+                role: "user",
+                content: chunkPrompt,
+              },
+            ],
+            max_tokens: 500,
+            temperature: 0.3,
+          });
 
-        // Add delay to avoid rate limiting
-        if (i < chunks.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          const chunkSummary = completion.choices[0]?.message?.content;
+          if (chunkSummary) {
+            chunkSummaries.push(chunkSummary);
+          }
+
+          // Add delay to avoid rate limiting
+          if (i < chunks.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+        } catch (chunkError) {
+          logger.error("Error processing chunk", {
+            chunkIndex: i + 1,
+            totalChunks: chunks.length,
+            error:
+              chunkError instanceof Error
+                ? chunkError.message
+                : "Unknown error",
+          });
+          // Continue with other chunks even if one fails
         }
       }
 
@@ -430,14 +448,14 @@ Guidelines:
         content: responseContent,
         usage: completion.usage
           ? {
-            prompt_tokens: completion.usage.prompt_tokens,
-            completion_tokens: completion.usage.completion_tokens,
-            total_tokens: completion.usage.total_tokens,
-          }
+              prompt_tokens: completion.usage.prompt_tokens,
+              completion_tokens: completion.usage.completion_tokens,
+              total_tokens: completion.usage.total_tokens,
+            }
           : undefined,
         trim: function (): string | undefined {
           throw new Error("Function not implemented.");
-        }
+        },
       };
 
       logger.info("OpenAI completion generated successfully", {

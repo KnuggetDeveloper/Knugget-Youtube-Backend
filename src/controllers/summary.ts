@@ -12,7 +12,7 @@ import { logger } from "../config/logger";
 
 export class SummaryController {
   // Generate AI summary from transcript
-  generate = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
+  generateHandler = async (req: AuthenticatedRequest, res: Response) => {
     if (!req.user) {
       const response: ApiResponse = {
         success: false,
@@ -60,7 +60,9 @@ export class SummaryController {
         summaryId: result.data?.id,
       });
 
-      res.json(response);
+      if (!res.headersSent) {
+        res.json(response);
+      }
     } catch (error) {
       logger.error("Summary generation failed", {
         error: error instanceof Error ? error.message : "Unknown error",
@@ -68,15 +70,22 @@ export class SummaryController {
         videoId: videoMetadata?.videoId,
       });
 
-      const response: ApiResponse = {
-        success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to generate summary",
-      };
+      if (!res.headersSent) {
+        const response: ApiResponse = {
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to generate summary",
+        };
 
-      res.status(500).json(response);
+        res.status(500).json(response);
+      }
     }
-  });
+  };
+
+  // Wrapped version with default timeout
+  generate = catchAsync(this.generateHandler);
 
   // Also update the save route to handle extension format:
   save = catchAsync(async (req: AuthenticatedRequest, res: Response) => {

@@ -1,51 +1,43 @@
-import { Router } from 'express';
-import { summaryController } from '../controllers/summary';
-import { authenticate, requireCredits } from '../middleware/auth';
-import { validate } from '../middleware/validation';
+import { Router } from "express";
+import { summaryController } from "../controllers/summary";
+import { authenticate, requireCredits } from "../middleware/auth";
+import { validate } from "../middleware/validation";
 import {
   generateSummarySchema,
   saveSummarySchema,
   updateSummarySchema,
-} from '../middleware/validation';
-import { config } from '../config';
+} from "../middleware/validation";
+import { config } from "../config";
+import { catchAsync } from "../middleware/errorHandler";
 
 const router = Router();
 
 // All summary routes require authentication - NO RATE LIMITING
 router.use(authenticate as any);
 
-// Generate AI summary from transcript - NO RATE LIMITING
+// Generate AI summary from transcript - NO RATE LIMITING (Extended timeout for AI processing)
 router.post(
-  '/generate',
+  "/generate",
   requireCredits(config.credits.perSummary) as any,
   // Remove the validate middleware temporarily or update the schema
-  summaryController.generate
+  catchAsync(summaryController.generateHandler, 120000) // 2 minutes timeout for AI processing
 );
 
 // Save summary - NO RATE LIMITING
 router.post(
-  '/save',
+  "/save",
   validate(saveSummarySchema) as any,
   summaryController.save
 );
 
 // Get user's summaries with pagination and filtering - NO RATE LIMITING
-router.get(
-  '/',
-  summaryController.getSummaries
-);
+router.get("/", summaryController.getSummaries);
 
 // Get summary statistics - NO RATE LIMITING
-router.get(
-  '/stats',
-  summaryController.getStats
-);
+router.get("/stats", summaryController.getStats);
 
 // Get single summary by ID - NO RATE LIMITING
-router.get(
-  '/:id',
-  summaryController.getSummaryById
-);
+router.get("/:id", summaryController.getSummaryById);
 
 // Update summary - NO RATE LIMITING
 router.put(
@@ -55,15 +47,9 @@ router.put(
 );
 
 // Delete summary - NO RATE LIMITING
-router.delete(
-  '/:id',
-  summaryController.deleteSummary
-);
+router.delete("/:id", summaryController.deleteSummary);
 
 // Get summary by video ID - NO RATE LIMITING
-router.get(
-  '/video/:videoId',
-  summaryController.getSummaryByVideoId
-);
+router.get("/video/:videoId", summaryController.getSummaryByVideoId);
 
 export default router;

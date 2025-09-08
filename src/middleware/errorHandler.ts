@@ -63,7 +63,7 @@ const handlePrismaError = (
         409,
         true,
         undefined,
-        'DUPLICATE_ENTRY'
+        "DUPLICATE_ENTRY"
       );
 
     case "P2025":
@@ -72,7 +72,7 @@ const handlePrismaError = (
         404,
         true,
         undefined,
-        'RECORD_NOT_FOUND'
+        "RECORD_NOT_FOUND"
       );
 
     case "P2003":
@@ -81,7 +81,7 @@ const handlePrismaError = (
         400,
         true,
         undefined,
-        'INVALID_REFERENCE'
+        "INVALID_REFERENCE"
       );
 
     case "P2014":
@@ -90,7 +90,7 @@ const handlePrismaError = (
         400,
         true,
         undefined,
-        'INVALID_RELATION'
+        "INVALID_RELATION"
       );
 
     case "P2021":
@@ -99,7 +99,7 @@ const handlePrismaError = (
         500,
         false,
         undefined,
-        'TABLE_NOT_FOUND'
+        "TABLE_NOT_FOUND"
       );
 
     case "P2022":
@@ -108,7 +108,7 @@ const handlePrismaError = (
         500,
         false,
         undefined,
-        'COLUMN_NOT_FOUND'
+        "COLUMN_NOT_FOUND"
       );
 
     case "P1001":
@@ -117,7 +117,7 @@ const handlePrismaError = (
         503,
         false,
         undefined,
-        'DATABASE_CONNECTION_FAILED',
+        "DATABASE_CONNECTION_FAILED",
         true
       );
 
@@ -127,7 +127,7 @@ const handlePrismaError = (
         504,
         false,
         undefined,
-        'DATABASE_TIMEOUT',
+        "DATABASE_TIMEOUT",
         true
       );
 
@@ -137,7 +137,7 @@ const handlePrismaError = (
         503,
         false,
         undefined,
-        'DATABASE_CONNECTION_LOST',
+        "DATABASE_CONNECTION_LOST",
         true
       );
 
@@ -145,14 +145,14 @@ const handlePrismaError = (
       logger.error("Unhandled Prisma error", {
         code: error.code,
         message: error.message,
-        meta: error.meta
+        meta: error.meta,
       });
       return new AppError(
         "Database operation failed",
         500,
         false,
         undefined,
-        'DATABASE_ERROR',
+        "DATABASE_ERROR",
         true
       );
   }
@@ -163,7 +163,7 @@ const handleValidationError = (error: ZodError): AppError => {
     field: err.path.join("."),
     message: err.message,
     code: err.code,
-    value: 'input' in err ? err.input : undefined
+    value: "input" in err ? err.input : undefined,
   }));
 
   return new AppError(
@@ -171,7 +171,7 @@ const handleValidationError = (error: ZodError): AppError => {
     400,
     true,
     errors,
-    'VALIDATION_ERROR'
+    "VALIDATION_ERROR"
   );
 };
 
@@ -182,7 +182,7 @@ const handleJWTError = (error: Error): AppError => {
       401,
       true,
       undefined,
-      'INVALID_TOKEN'
+      "INVALID_TOKEN"
     );
   }
 
@@ -192,7 +192,7 @@ const handleJWTError = (error: Error): AppError => {
       401,
       true,
       undefined,
-      'TOKEN_EXPIRED'
+      "TOKEN_EXPIRED"
     );
   }
 
@@ -202,7 +202,7 @@ const handleJWTError = (error: Error): AppError => {
       401,
       true,
       undefined,
-      'TOKEN_NOT_ACTIVE'
+      "TOKEN_NOT_ACTIVE"
     );
   }
 
@@ -211,50 +211,50 @@ const handleJWTError = (error: Error): AppError => {
     401,
     true,
     undefined,
-    'AUTH_ERROR'
+    "AUTH_ERROR"
   );
 };
 
 const handleOpenAIError = (error: ErrorWithCode): AppError => {
-  if (error.code === 'insufficient_quota') {
+  if (error.code === "insufficient_quota") {
     return new AppError(
       "AI service quota exceeded. Please try again later.",
       503,
       true,
       undefined,
-      'AI_QUOTA_EXCEEDED',
+      "AI_QUOTA_EXCEEDED",
       true
     );
   }
 
-  if (error.code === 'rate_limit_exceeded') {
+  if (error.code === "rate_limit_exceeded") {
     return new AppError(
       "AI service rate limit exceeded. Please try again in a moment.",
       429,
       true,
       undefined,
-      'AI_RATE_LIMITED',
+      "AI_RATE_LIMITED",
       true
     );
   }
 
-  if (error.code === 'context_length_exceeded') {
+  if (error.code === "context_length_exceeded") {
     return new AppError(
       "Content too long for AI processing. Please try with shorter content.",
       413,
       true,
       undefined,
-      'CONTENT_TOO_LONG'
+      "CONTENT_TOO_LONG"
     );
   }
 
-  if (error.code === 'invalid_request_error') {
+  if (error.code === "invalid_request_error") {
     return new AppError(
       "Invalid request to AI service",
       400,
       true,
       undefined,
-      'AI_INVALID_REQUEST'
+      "AI_INVALID_REQUEST"
     );
   }
 
@@ -263,41 +263,41 @@ const handleOpenAIError = (error: ErrorWithCode): AppError => {
     503,
     true,
     undefined,
-    'AI_SERVICE_ERROR',
+    "AI_SERVICE_ERROR",
     true
   );
 };
 
 const handleNetworkError = (error: ErrorWithCode): AppError => {
-  if (error.code === 'ECONNREFUSED') {
+  if (error.code === "ECONNREFUSED") {
     return new AppError(
       "Service temporarily unavailable",
       503,
       false,
       undefined,
-      'SERVICE_UNAVAILABLE',
+      "SERVICE_UNAVAILABLE",
       true
     );
   }
 
-  if (error.code === 'ENOTFOUND') {
+  if (error.code === "ENOTFOUND") {
     return new AppError(
       "Service endpoint not found",
       503,
       false,
       undefined,
-      'SERVICE_NOT_FOUND',
+      "SERVICE_NOT_FOUND",
       true
     );
   }
 
-  if (error.code === 'ETIMEDOUT') {
+  if (error.code === "ETIMEDOUT") {
     return new AppError(
       "Request timed out",
       504,
       false,
       undefined,
-      'REQUEST_TIMEOUT',
+      "REQUEST_TIMEOUT",
       true
     );
   }
@@ -307,7 +307,7 @@ const handleNetworkError = (error: ErrorWithCode): AppError => {
     503,
     false,
     undefined,
-    'NETWORK_ERROR',
+    "NETWORK_ERROR",
     true
   );
 };
@@ -320,7 +320,7 @@ export const errorHandler = (
   next: NextFunction
 ) => {
   let appError: AppError;
-  const requestId = req.headers['x-request-id'] || 'unknown';
+  const requestId = req.headers["x-request-id"] || "unknown";
 
   // Handle different error types
   if (error instanceof AppError) {
@@ -333,7 +333,7 @@ export const errorHandler = (
       500,
       false,
       undefined,
-      'DATABASE_UNKNOWN_ERROR',
+      "DATABASE_UNKNOWN_ERROR",
       true
     );
   } else if (error instanceof Prisma.PrismaClientInitializationError) {
@@ -342,16 +342,24 @@ export const errorHandler = (
       500,
       false,
       undefined,
-      'DATABASE_INIT_ERROR',
+      "DATABASE_INIT_ERROR",
       true
     );
   } else if (error instanceof ZodError) {
     appError = handleValidationError(error);
-  } else if (error.name?.includes('JWT') || error.name?.includes('Token')) {
+  } else if (error.name?.includes("JWT") || error.name?.includes("Token")) {
     appError = handleJWTError(error);
-  } else if (error.message?.includes('OpenAI') || (error as ErrorWithCode).code?.startsWith('openai')) {
+  } else if (
+    error.message?.includes("OpenAI") ||
+    (error as ErrorWithCode).code?.startsWith("openai")
+  ) {
     appError = handleOpenAIError(error as ErrorWithCode);
-  } else if ((error as ErrorWithCode).code && ['ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT'].includes((error as ErrorWithCode).code!)) {
+  } else if (
+    (error as ErrorWithCode).code &&
+    ["ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT"].includes(
+      (error as ErrorWithCode).code!
+    )
+  ) {
     appError = handleNetworkError(error as ErrorWithCode);
   } else {
     // Enhanced unhandled error logging
@@ -366,9 +374,9 @@ export const errorHandler = (
       userAgent: req.get("User-Agent"),
       requestId,
       timestamp: new Date().toISOString(),
-      body: req.method !== 'GET' ? req.body : undefined,
+      body: req.method !== "GET" ? req.body : undefined,
       query: req.query,
-      params: req.params
+      params: req.params,
     });
 
     appError = new AppError(
@@ -378,7 +386,7 @@ export const errorHandler = (
       500,
       false,
       undefined,
-      'INTERNAL_ERROR',
+      "INTERNAL_ERROR",
       false
     );
   }
@@ -395,7 +403,7 @@ export const errorHandler = (
       userAgent: req.get("User-Agent"),
       requestId,
       retryable: appError.retryable,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   } else {
     logger.error("System error", {
@@ -408,7 +416,7 @@ export const errorHandler = (
       ip: req.ip,
       userAgent: req.get("User-Agent"),
       requestId,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 
@@ -419,7 +427,7 @@ export const errorHandler = (
     code: appError.code,
     retryable: appError.retryable,
     timestamp: new Date().toISOString(),
-    requestId: requestId as string
+    requestId: requestId as string,
   };
 
   // Include validation errors in development or for client errors
@@ -440,14 +448,14 @@ export const errorHandler = (
   }
 
   // Handle specific error codes with custom responses
-  if (appError.code === 'INSUFFICIENT_CREDITS') {
+  if (appError.code === "INSUFFICIENT_CREDITS") {
     response.upgradeUrl = `${config.server.apiBaseUrl}/upgrade`;
     response.creditsNeeded = 1;
   }
 
   // Add correlation ID for error tracking
-  if (req.headers['x-correlation-id']) {
-    response.correlationId = req.headers['x-correlation-id'] as string;
+  if (req.headers["x-correlation-id"]) {
+    response.correlationId = req.headers["x-correlation-id"] as string;
   }
 
   res.status(appError.statusCode).json(response);
@@ -458,9 +466,9 @@ export const notFoundHandler = (req: Request, res: Response) => {
   const response: ErrorResponse = {
     success: false,
     error: `Route ${req.originalUrl} not found`,
-    code: 'ROUTE_NOT_FOUND',
+    code: "ROUTE_NOT_FOUND",
     timestamp: new Date().toISOString(),
-    suggestions: getSuggestions(req.originalUrl)
+    suggestions: getSuggestions(req.originalUrl),
   };
 
   logger.warn("Route not found", {
@@ -468,7 +476,7 @@ export const notFoundHandler = (req: Request, res: Response) => {
     method: req.method,
     ip: req.ip,
     userAgent: req.get("User-Agent"),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 
   res.status(404).json(response);
@@ -492,17 +500,17 @@ function getSuggestions(url: string): string[] {
 
   // Common API endpoints
   const commonEndpoints = [
-    '/api/auth/login',
-    '/api/auth/register',
-    '/api/auth/me',
-    '/api/summary/generate',
-    '/api/summary',
-    '/api/user/profile',
-    '/api/health'
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/me",
+    "/api/summary/generate",
+    "/api/summary",
+    "/api/user/profile",
+    "/api/health",
   ];
 
   // Find similar endpoints
-  commonEndpoints.forEach(endpoint => {
+  commonEndpoints.forEach((endpoint) => {
     if (levenshteinDistance(url, endpoint) < 3) {
       suggestions.push(endpoint);
     }
@@ -548,24 +556,37 @@ function levenshteinDistance(str1: string, str2: string): number {
 // Async error handler wrapper with timeout
 export const catchAsync = (fn: Function, timeout: number = 30000) => {
   return (req: Request, res: Response, next: NextFunction) => {
+    let isCompleted = false;
+
     const timeoutId = setTimeout(() => {
-      next(new AppError(
-        "Request timeout",
-        504,
-        true,
-        undefined,
-        'REQUEST_TIMEOUT',
-        true
-      ));
+      if (!isCompleted && !res.headersSent) {
+        isCompleted = true;
+        next(
+          new AppError(
+            "Request timeout",
+            504,
+            true,
+            undefined,
+            "REQUEST_TIMEOUT",
+            true
+          )
+        );
+      }
     }, timeout);
 
     Promise.resolve(fn(req, res, next))
       .then(() => {
-        clearTimeout(timeoutId);
+        if (!isCompleted) {
+          isCompleted = true;
+          clearTimeout(timeoutId);
+        }
       })
       .catch((error) => {
-        clearTimeout(timeoutId);
-        next(error);
+        if (!isCompleted && !res.headersSent) {
+          isCompleted = true;
+          clearTimeout(timeoutId);
+          next(error);
+        }
       });
   };
 };
@@ -575,11 +596,11 @@ export const healthCheck = (req: Request, res: Response) => {
   const response: ApiResponse = {
     success: true,
     data: {
-      status: 'healthy',
+      status: "healthy",
       timestamp: new Date().toISOString(),
-      errorHandler: 'active',
-      version: '1.0.0'
-    }
+      errorHandler: "active",
+      version: "1.0.0",
+    },
   };
 
   res.json(response);
