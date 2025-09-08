@@ -98,15 +98,55 @@ export class SummaryController {
     }
 
     try {
-      const summaryData = req.body;
+      const rawData = req.body;
+
+      logger.info("Save summary request received", {
+        userId: req.user.id,
+        hasTitle: !!rawData.title,
+        hasFullSummary: !!rawData.fullSummary,
+        hasVideoMetadata: !!rawData.videoMetadata,
+        hasVideoId: !!rawData.videoId,
+        dataKeys: Object.keys(rawData),
+        dataStructure: {
+          title: typeof rawData.title,
+          keyPoints: Array.isArray(rawData.keyPoints)
+            ? rawData.keyPoints.length
+            : typeof rawData.keyPoints,
+          fullSummary: typeof rawData.fullSummary,
+          tags: Array.isArray(rawData.tags)
+            ? rawData.tags.length
+            : typeof rawData.tags,
+          videoId: typeof rawData.videoId,
+          videoTitle: typeof rawData.videoTitle,
+          channelName: typeof rawData.channelName,
+        },
+      });
 
       // Ensure required fields are present
-      if (!summaryData.title || !summaryData.fullSummary) {
+      if (!rawData.title || !rawData.fullSummary) {
         const response: ApiResponse = {
           success: false,
           error: "Missing required summary data",
         };
         return res.status(400).json(response);
+      }
+
+      // Normalize data format - handle both old (with videoMetadata) and new (flattened) formats
+      let summaryData;
+      if (rawData.videoMetadata) {
+        // Old format with nested videoMetadata
+        summaryData = {
+          ...rawData,
+          videoId: rawData.videoMetadata.videoId,
+          videoTitle: rawData.videoMetadata.title,
+          channelName: rawData.videoMetadata.channelName,
+          videoDuration: rawData.videoMetadata.duration,
+          videoUrl: rawData.videoMetadata.url,
+          thumbnailUrl: rawData.videoMetadata.thumbnailUrl,
+        };
+      } else {
+        // New format with flattened fields
+        summaryData = rawData;
       }
 
       const result = await summaryService.saveSummary(req.user.id, summaryData);

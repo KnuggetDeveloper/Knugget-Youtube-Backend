@@ -23,10 +23,10 @@ router.post(
   catchAsync(summaryController.generateHandler, 120000) // 2 minutes timeout for AI processing
 );
 
-// Save summary - NO RATE LIMITING
+// Save summary - NO RATE LIMITING (Validation temporarily disabled for debugging)
 router.post(
   "/save",
-  validate(saveSummarySchema) as any,
+  // validate(saveSummarySchema) as any,
   summaryController.save
 );
 

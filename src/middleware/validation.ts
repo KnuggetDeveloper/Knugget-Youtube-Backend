@@ -96,18 +96,49 @@ export const generateSummarySchema = z.object({
 });
 
 export const saveSummarySchema = z.object({
-  body: z.object({
-    title: z.string().min(1, "Title is required").max(200, "Title too long"),
-    keyPoints: z.array(z.string()).min(1, "Key points are required"),
-    fullSummary: z
-      .string()
-      .min(1, "Full summary is required")
-      .max(5000, "Summary too long"),
-    tags: z.array(z.string()).max(10, "Too many tags"),
-    videoMetadata: videoMetadataSchema,
-    transcript: z.array(transcriptSegmentSchema).optional(),
-    transcriptText: z.string().optional(),
-  }),
+  body: z
+    .object({
+      title: z.string().min(1, "Title is required").max(200, "Title too long"),
+      keyPoints: z.array(z.string()).min(1, "Key points are required"),
+      fullSummary: z
+        .string()
+        .min(1, "Full summary is required")
+        .max(5000, "Summary too long"),
+      tags: z.array(z.string()).max(10, "Too many tags"),
+      // Flattened video metadata fields (for new format)
+      videoId: z.string().min(1, "Video ID is required").optional(),
+      videoTitle: z.string().min(1, "Video title is required").optional(),
+      channelName: z.string().min(1, "Channel name is required").optional(),
+      videoDuration: z.string().optional(),
+      videoUrl: z.string().url("Invalid video URL").optional(),
+      thumbnailUrl: z.string().optional(), // Make URL validation optional since it might be empty
+      transcript: z.array(transcriptSegmentSchema).optional(),
+      transcriptText: z.string().optional(),
+      // Support for backward compatibility (for old format)
+      videoMetadata: videoMetadataSchema.optional(),
+      // Additional fields that might be present
+      id: z.string().optional(),
+      status: z
+        .enum(["PENDING", "PROCESSING", "COMPLETED", "FAILED"])
+        .optional(),
+      userId: z.string().optional(),
+      createdAt: z.union([z.string(), z.date()]).optional(),
+      updatedAt: z.union([z.string(), z.date()]).optional(),
+      isUnsaved: z.boolean().optional(),
+    })
+    .refine(
+      (data) => {
+        // Ensure either flattened fields or videoMetadata is provided
+        const hasFlattened =
+          data.videoId && data.videoTitle && data.channelName;
+        const hasNested = data.videoMetadata;
+        return hasFlattened || hasNested;
+      },
+      {
+        message:
+          "Either video metadata fields or videoMetadata object is required",
+      }
+    ),
 });
 
 export const updateSummarySchema = z.object({
@@ -208,37 +239,59 @@ export const validate = (schema: z.ZodSchema) => {
 export const saveLinkedinPostSchema = z.object({
   body: z.object({
     title: z.string().max(500, "Title too long").optional(),
-    content: z.string().min(1, "Content is required").max(10000, "Content too long"),
-    author: z.string().min(1, "Author is required").max(200, "Author name too long"),
+    content: z
+      .string()
+      .min(1, "Content is required")
+      .max(10000, "Content too long"),
+    author: z
+      .string()
+      .min(1, "Author is required")
+      .max(200, "Author name too long"),
     postUrl: z.string().url("Invalid post URL"),
     linkedinPostId: z.string().optional(),
     platform: z.string().default("linkedin"),
-    engagement: z.object({
-      likes: z.number().min(0).optional(),
-      comments: z.number().min(0).optional(),
-      shares: z.number().min(0).optional(),
-    }).optional(),
-    metadata: z.object({
-      timestamp: z.string().optional(),
-      source: z.string().optional(),
-    }).optional(),
+    engagement: z
+      .object({
+        likes: z.number().min(0).optional(),
+        comments: z.number().min(0).optional(),
+        shares: z.number().min(0).optional(),
+      })
+      .optional(),
+    metadata: z
+      .object({
+        timestamp: z.string().optional(),
+        source: z.string().optional(),
+      })
+      .optional(),
   }),
 });
 
 export const updateLinkedinPostSchema = z.object({
   body: z.object({
     title: z.string().max(500, "Title too long").optional(),
-    content: z.string().min(1, "Content cannot be empty").max(10000, "Content too long").optional(),
-    author: z.string().min(1, "Author cannot be empty").max(200, "Author name too long").optional(),
-    engagement: z.object({
-      likes: z.number().min(0).optional(),
-      comments: z.number().min(0).optional(),
-      shares: z.number().min(0).optional(),
-    }).optional(),
-    metadata: z.object({
-      timestamp: z.string().optional(),
-      source: z.string().optional(),
-    }).optional(),
+    content: z
+      .string()
+      .min(1, "Content cannot be empty")
+      .max(10000, "Content too long")
+      .optional(),
+    author: z
+      .string()
+      .min(1, "Author cannot be empty")
+      .max(200, "Author name too long")
+      .optional(),
+    engagement: z
+      .object({
+        likes: z.number().min(0).optional(),
+        comments: z.number().min(0).optional(),
+        shares: z.number().min(0).optional(),
+      })
+      .optional(),
+    metadata: z
+      .object({
+        timestamp: z.string().optional(),
+        source: z.string().optional(),
+      })
+      .optional(),
   }),
 });
 
@@ -277,22 +330,19 @@ export const createWebsiteSummarySchema = z.object({
       .trim(),
     content: z
       .string()
-      .min(100, "Content too short. Minimum 100 characters required for meaningful summarization.")
+      .min(
+        100,
+        "Content too short. Minimum 100 characters required for meaningful summarization."
+      )
       .max(100000, "Content too long. Maximum 100,000 characters allowed.")
       .trim(),
-    url: z
-      .string()
-      .url("Invalid URL format")
-      .max(2000, "URL too long"),
+    url: z.string().url("Invalid URL format").max(2000, "URL too long"),
   }),
 });
 
 export const getWebsiteSummarySchema = z.object({
   query: z.object({
-    url: z
-      .string()
-      .url("Invalid URL format")
-      .max(2000, "URL too long"),
+    url: z.string().url("Invalid URL format").max(2000, "URL too long"),
   }),
 });
 
@@ -300,39 +350,39 @@ export const getWebsiteSummarySchema = z.object({
 export const validateWebsiteUrl = (url: string): boolean => {
   try {
     const urlObj = new URL(url);
-    
+
     // Only allow HTTP and HTTPS protocols
-    if (!['http:', 'https:'].includes(urlObj.protocol)) {
+    if (!["http:", "https:"].includes(urlObj.protocol)) {
       return false;
     }
-    
+
     // Block localhost and private IP ranges for security
     const hostname = urlObj.hostname.toLowerCase();
     if (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname.startsWith('192.168.') ||
-      hostname.startsWith('10.') ||
-      hostname.startsWith('172.16.') ||
-      hostname.startsWith('172.17.') ||
-      hostname.startsWith('172.18.') ||
-      hostname.startsWith('172.19.') ||
-      hostname.startsWith('172.20.') ||
-      hostname.startsWith('172.21.') ||
-      hostname.startsWith('172.22.') ||
-      hostname.startsWith('172.23.') ||
-      hostname.startsWith('172.24.') ||
-      hostname.startsWith('172.25.') ||
-      hostname.startsWith('172.26.') ||
-      hostname.startsWith('172.27.') ||
-      hostname.startsWith('172.28.') ||
-      hostname.startsWith('172.29.') ||
-      hostname.startsWith('172.30.') ||
-      hostname.startsWith('172.31.')
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname.startsWith("192.168.") ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("172.16.") ||
+      hostname.startsWith("172.17.") ||
+      hostname.startsWith("172.18.") ||
+      hostname.startsWith("172.19.") ||
+      hostname.startsWith("172.20.") ||
+      hostname.startsWith("172.21.") ||
+      hostname.startsWith("172.22.") ||
+      hostname.startsWith("172.23.") ||
+      hostname.startsWith("172.24.") ||
+      hostname.startsWith("172.25.") ||
+      hostname.startsWith("172.26.") ||
+      hostname.startsWith("172.27.") ||
+      hostname.startsWith("172.28.") ||
+      hostname.startsWith("172.29.") ||
+      hostname.startsWith("172.30.") ||
+      hostname.startsWith("172.31.")
     ) {
       return false;
     }
-    
+
     return true;
   } catch {
     return false;
