@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { config } from "../config";
 import { logger } from "../config/logger";
 import { AppError } from "../middleware/errorHandler";
+import { prisma } from "../config/database";
 import {
   TranscriptSegment,
   VideoMetadata,
@@ -38,17 +39,67 @@ export class OpenAIService {
     });
   }
 
+  // Track OpenAI usage
+  private async trackUsage(
+    userId: string,
+    operation: string,
+    model: string,
+    usage: {
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_tokens: number;
+    },
+    videoId?: string,
+    summaryId?: string
+  ): Promise<void> {
+    try {
+      await prisma.openAIUsage.create({
+        data: {
+          userId,
+          operation,
+          model,
+          promptTokens: usage.prompt_tokens,
+          completionTokens: usage.completion_tokens,
+          totalTokens: usage.total_tokens,
+          videoId,
+          summaryId,
+        },
+      });
+
+      logger.info("OpenAI usage tracked", {
+        userId,
+        operation,
+        model,
+        promptTokens: usage.prompt_tokens,
+        completionTokens: usage.completion_tokens,
+        totalTokens: usage.total_tokens,
+      });
+    } catch (error) {
+      logger.error("Failed to track OpenAI usage", {
+        error,
+        userId,
+        operation,
+      });
+      // Don't throw error as tracking failure shouldn't break the main operation
+    }
+  }
+
   // Generate summary from transcript
   async generateSummary(
     transcript: TranscriptSegment[],
-    videoMetadata: VideoMetadata
+    videoMetadata: VideoMetadata,
+    userId?: string
   ): Promise<ServiceResponse<OpenAISummaryResponse>> {
     try {
       const transcriptText = this.formatTranscriptForAI(transcript);
 
       if (transcriptText.length > MAX_TRANSCRIPT_LENGTH) {
         // Chunk large transcripts
-        return this.generateSummaryFromChunks(transcript, videoMetadata);
+        return this.generateSummaryFromChunks(
+          transcript,
+          videoMetadata,
+          userId
+        );
       }
 
       const prompt = this.createSummaryPrompt(transcriptText, videoMetadata);
@@ -76,6 +127,17 @@ export class OpenAIService {
         throw new AppError("Empty response from OpenAI", 500);
       }
 
+      // Track OpenAI usage if userId is provided
+      if (userId && completion.usage) {
+        await this.trackUsage(
+          userId,
+          "summary_generation",
+          config.openai.model,
+          completion.usage,
+          videoMetadata.videoId
+        );
+      }
+
       let summaryData: OpenAISummaryResponse;
       try {
         summaryData = JSON.parse(responseText);
@@ -92,11 +154,21 @@ export class OpenAIService {
         throw new AppError("Invalid summary response structure", 500);
       }
 
+      // Add usage information to response
+      if (completion.usage) {
+        summaryData.usage = {
+          promptTokens: completion.usage.prompt_tokens,
+          completionTokens: completion.usage.completion_tokens,
+          totalTokens: completion.usage.total_tokens,
+        };
+      }
+
       logger.info("Summary generated successfully", {
         videoId: videoMetadata.videoId,
         keyPointsCount: summaryData.keyPoints.length,
         tagsCount: summaryData.tags.length,
         transcriptLength: transcriptText.length,
+        usage: completion.usage,
       });
 
       return { success: true, data: summaryData };
@@ -133,7 +205,8 @@ export class OpenAIService {
   // Handle large transcripts by chunking
   private async generateSummaryFromChunks(
     transcript: TranscriptSegment[],
-    videoMetadata: VideoMetadata
+    videoMetadata: VideoMetadata,
+    userId?: string
   ): Promise<ServiceResponse<OpenAISummaryResponse>> {
     try {
       const chunks = this.chunkTranscript(transcript);
@@ -171,6 +244,17 @@ export class OpenAIService {
             max_tokens: 500,
             temperature: 0.3,
           });
+
+          // Track usage for chunk processing
+          if (userId && completion.usage) {
+            await this.trackUsage(
+              userId,
+              "chunk_summary",
+              config.openai.model,
+              completion.usage,
+              videoMetadata.videoId
+            );
+          }
 
           const chunkSummary = completion.choices[0]?.message?.content;
           if (chunkSummary) {
@@ -219,6 +303,17 @@ export class OpenAIService {
         response_format: { type: "json_object" },
       });
 
+      // Track usage for final summary
+      if (userId && finalCompletion.usage) {
+        await this.trackUsage(
+          userId,
+          "final_summary",
+          config.openai.model,
+          finalCompletion.usage,
+          videoMetadata.videoId
+        );
+      }
+
       const finalResponseText = finalCompletion.choices[0]?.message?.content;
       if (!finalResponseText) {
         throw new AppError("Empty response from OpenAI", 500);
@@ -228,6 +323,15 @@ export class OpenAIService {
 
       if (!this.validateSummaryResponse(summaryData)) {
         throw new AppError("Invalid summary response structure", 500);
+      }
+
+      // Add usage information to response
+      if (finalCompletion.usage) {
+        summaryData.usage = {
+          promptTokens: finalCompletion.usage.prompt_tokens,
+          completionTokens: finalCompletion.usage.completion_tokens,
+          totalTokens: finalCompletion.usage.total_tokens,
+        };
       }
 
       logger.info("Chunked summary generated successfully", {

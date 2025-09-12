@@ -41,6 +41,7 @@ model User {
 
   summaries     Summary[]
   refreshTokens RefreshToken[]
+  openaiUsage   OpenAIUsage[]
   // LinkedIn and Website features disabled - can be re-enabled via feature flags
   // linkedinPosts    LinkedinPost[]
   // websiteSummaries WebsiteSummary[]
@@ -184,4 +185,29 @@ model ApiUsage {
   @@index([userId])
   @@index([createdAt])
   @@map("api_usage")
+}
+
+model OpenAIUsage {
+  id               String @id @default(cuid())
+  userId           String
+  operation        String // 'summary_generation', 'completion', etc.
+  model            String // 'gpt-4-turbo', 'gpt-3.5-turbo', etc.
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+
+  // Additional context
+  videoId   String? // For summary operations
+  summaryId String? // Link to summary if created
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([operation])
+  @@map("openai_usage")
 }

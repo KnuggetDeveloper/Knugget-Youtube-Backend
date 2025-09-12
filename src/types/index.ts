@@ -109,6 +109,24 @@ export interface OpenAISummaryResponse {
   keyPoints: string[];
   fullSummary: string;
   tags: string[];
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+}
+
+export interface OpenAIUsageData {
+  id: string;
+  userId: string;
+  operation: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  videoId?: string;
+  summaryId?: string;
+  createdAt: string;
 }
 
 // User Types
@@ -136,6 +154,10 @@ export interface UserStats {
   creditsRemaining: number;
   planStatus: UserPlan;
   joinedDate: string;
+  // OpenAI Usage stats
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
 }
 
 // Validation Schemas (DTOs)

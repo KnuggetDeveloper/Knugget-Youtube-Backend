@@ -56,7 +56,8 @@ export class SummaryService {
       // Generate summary using OpenAI without saving to database
       const aiResult = await openaiService.generateSummary(
         data.transcript,
-        data.videoMetadata
+        data.videoMetadata,
+        userId
       );
 
       if (!aiResult.success || !aiResult.data) {

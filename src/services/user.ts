@@ -179,6 +179,16 @@ export class UserService {
 
       const creditsUsed = Math.max(0, maxCredits - user.credits);
 
+      // Get OpenAI usage statistics
+      const openaiUsageStats = await prisma.openAIUsage.aggregate({
+        where: { userId },
+        _sum: {
+          promptTokens: true,
+          completionTokens: true,
+          totalTokens: true,
+        },
+      });
+
       const stats: UserStats = {
         totalSummaries: user._count.summaries,
         // LinkedIn and Website stats disabled - keeping interface clean for YouTube-only
@@ -191,6 +201,10 @@ export class UserService {
         creditsRemaining: user.credits,
         planStatus: user.plan,
         joinedDate: user.createdAt.toISOString(),
+        // OpenAI Usage stats
+        totalInputTokens: openaiUsageStats._sum.promptTokens || 0,
+        totalOutputTokens: openaiUsageStats._sum.completionTokens || 0,
+        totalTokens: openaiUsageStats._sum.totalTokens || 0,
       };
 
       return { success: true, data: stats };
