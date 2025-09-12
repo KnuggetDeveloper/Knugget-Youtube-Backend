@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "tsx watch src/app.ts",
     "build": "npx prisma generate && tsc",
-    "start": "node dist/app.js",
+    "start": "npx prisma migrate deploy --skip-seed && node dist/app.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "test": "jest",
     "test:watch": "jest --watch",

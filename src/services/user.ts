@@ -179,15 +179,28 @@ export class UserService {
 
       const creditsUsed = Math.max(0, maxCredits - user.credits);
 
-      // Get OpenAI usage statistics
-      const openaiUsageStats = await prisma.openAIUsage.aggregate({
-        where: { userId },
+      // Get OpenAI usage statistics (with fallback for backward compatibility)
+      let openaiUsageStats = {
         _sum: {
-          promptTokens: true,
-          completionTokens: true,
-          totalTokens: true,
+          promptTokens: null as number | null,
+          completionTokens: null as number | null,
+          totalTokens: null as number | null,
         },
-      });
+      };
+
+      try {
+        openaiUsageStats = await prisma.openAIUsage.aggregate({
+          where: { userId },
+          _sum: {
+            promptTokens: true,
+            completionTokens: true,
+            totalTokens: true,
+          },
+        });
+      } catch (error) {
+        // Handle case where OpenAI usage table doesn't exist yet during migration
+        logger.warn("OpenAI usage table not accessible, using defaults", { userId });
+      }
 
       const stats: UserStats = {
         totalSummaries: user._count.summaries,

@@ -129,13 +129,18 @@ export class OpenAIService {
 
       // Track OpenAI usage if userId is provided
       if (userId && completion.usage) {
-        await this.trackUsage(
-          userId,
-          "summary_generation",
-          config.openai.model,
-          completion.usage,
-          videoMetadata.videoId
-        );
+        try {
+          await this.trackUsage(
+            userId,
+            "summary_generation",
+            config.openai.model,
+            completion.usage,
+            videoMetadata.videoId
+          );
+        } catch (trackingError) {
+          // Continue operation even if tracking fails
+          logger.warn("Failed to track OpenAI usage", { trackingError, userId });
+        }
       }
 
       let summaryData: OpenAISummaryResponse;
@@ -247,13 +252,17 @@ export class OpenAIService {
 
           // Track usage for chunk processing
           if (userId && completion.usage) {
-            await this.trackUsage(
-              userId,
-              "chunk_summary",
-              config.openai.model,
-              completion.usage,
-              videoMetadata.videoId
-            );
+            try {
+              await this.trackUsage(
+                userId,
+                "chunk_summary",
+                config.openai.model,
+                completion.usage,
+                videoMetadata.videoId
+              );
+            } catch (trackingError) {
+              logger.warn("Failed to track chunk usage", { trackingError, userId });
+            }
           }
 
           const chunkSummary = completion.choices[0]?.message?.content;
@@ -305,13 +314,17 @@ export class OpenAIService {
 
       // Track usage for final summary
       if (userId && finalCompletion.usage) {
-        await this.trackUsage(
-          userId,
-          "final_summary",
-          config.openai.model,
-          finalCompletion.usage,
-          videoMetadata.videoId
-        );
+        try {
+          await this.trackUsage(
+            userId,
+            "final_summary",
+            config.openai.model,
+            finalCompletion.usage,
+            videoMetadata.videoId
+          );
+        } catch (trackingError) {
+          logger.warn("Failed to track final summary usage", { trackingError, userId });
+        }
       }
 
       const finalResponseText = finalCompletion.choices[0]?.message?.content;
