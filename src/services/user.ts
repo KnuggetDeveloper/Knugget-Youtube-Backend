@@ -132,9 +132,6 @@ export class UserService {
           _count: {
             select: {
               summaries: true,
-              // LinkedIn and Website counts disabled - can be re-enabled via feature flags
-              // linkedinPosts: true,
-              // websiteSummaries: true,
             },
           },
         },
@@ -156,20 +153,6 @@ export class UserService {
           status: "COMPLETED",
         },
       });
-
-      // LinkedIn and Website monthly counts disabled
-      // const linkedinPostsThisMonth = await prisma.linkedinPost.count({
-      //   where: {
-      //     userId,
-      //     createdAt: { gte: startOfMonth },
-      //   },
-      // });
-      // const websiteSummariesThisMonth = await prisma.websiteSummary.count({
-      //   where: {
-      //     userId,
-      //     createdAt: { gte: startOfMonth },
-      //   },
-      // });
 
       // Calculate credits used (assuming user started with max credits)
       const maxCredits =
@@ -206,12 +189,7 @@ export class UserService {
 
       const stats: UserStats = {
         totalSummaries: user._count.summaries,
-        // LinkedIn and Website stats disabled - keeping interface clean for YouTube-only
-        // totalLinkedinPosts: user._count.linkedinPosts,
-        // totalWebsiteSummaries: user._count.websiteSummaries,
         summariesThisMonth,
-        // linkedinPostsThisMonth,
-        // websiteSummariesThisMonth,
         creditsUsed,
         creditsRemaining: user.credits,
         planStatus: user.plan,

@@ -42,10 +42,6 @@ model User {
   summaries     Summary[]
   refreshTokens RefreshToken[]
   openaiUsage   OpenAIUsage[]
-  // LinkedIn and Website features disabled - can be re-enabled via feature flags
-  // linkedinPosts    LinkedinPost[]
-  // websiteSummaries WebsiteSummary[]
-
   @@map("users")
 }
 
@@ -97,60 +93,6 @@ model Summary {
   @@index([createdAt])
   @@map("summaries")
 }
-
-// Website feature disabled - can be re-enabled via feature flags
-// model WebsiteSummary {
-//   id          String   @id @default(cuid())
-//   title       String
-//   content     String   @db.Text // Store full article content
-//   summary     String   @db.Text // AI-generated summary
-//   url         String
-//   websiteName String   // e.g., "Medium", "Dev.to"
-//   faviconUrl  String?  // Optional favicon URL
-//
-//   // User relation
-//   userId String
-//   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-//
-//   // Timestamps
-//   createdAt DateTime @default(now())
-//   updatedAt DateTime @updatedAt
-//
-//   // Indexes for performance
-//   @@index([userId])
-//   @@index([url])
-//   @@unique([userId, url]) // Prevent duplicate summaries for same URL by same user
-//   @@map("website_summaries")
-// }
-
-// LinkedIn feature disabled - can be re-enabled via feature flags
-// model LinkedinPost {
-//   id             String   @id @default(cuid())
-//   title          String?
-//   content        String
-//   author         String
-//   postUrl        String
-//   linkedinPostId String?
-//   platform       String   @default("linkedin")
-//   engagement     Json? // Store likes, comments, shares
-//   metadata       Json? // Store additional metadata
-//   savedAt        DateTime @default(now())
-//
-//   // User relation
-//   userId String
-//   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-//
-//   // Timestamps
-//   createdAt DateTime @default(now())
-//   updatedAt DateTime @updatedAt
-//
-//   @@unique([userId, postUrl]) // Prevent duplicate saves
-//   // Indexes
-//   @@index([userId])
-//   @@index([savedAt])
-//   @@index([platform])
-//   @@map("linkedin_posts")
-// }
 
 model VideoMetadata {
   id           String    @id @default(cuid())
