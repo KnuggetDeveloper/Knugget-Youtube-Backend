@@ -202,9 +202,9 @@ export class UserService {
         planStatus: user.plan,
         joinedDate: user.createdAt.toISOString(),
         // OpenAI Usage stats
-        totalInputTokens: openaiUsageStats._sum.promptTokens || 0,
-        totalOutputTokens: openaiUsageStats._sum.completionTokens || 0,
-        totalTokens: openaiUsageStats._sum.totalTokens || 0,
+        totalInputTokens: openaiUsageStats._sum.promptTokens ?? 0,
+        totalOutputTokens: openaiUsageStats._sum.completionTokens ?? 0,
+        totalTokens: openaiUsageStats._sum.totalTokens ?? 0,
       };
 
       return { success: true, data: stats };
