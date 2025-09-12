@@ -139,7 +139,10 @@ export class OpenAIService {
           );
         } catch (trackingError) {
           // Continue operation even if tracking fails
-          logger.warn("Failed to track OpenAI usage", { trackingError, userId });
+          logger.warn("Failed to track OpenAI usage", {
+            trackingError,
+            userId,
+          });
         }
       }
 
@@ -261,7 +264,10 @@ export class OpenAIService {
                 videoMetadata.videoId
               );
             } catch (trackingError) {
-              logger.warn("Failed to track chunk usage", { trackingError, userId });
+              logger.warn("Failed to track chunk usage", {
+                trackingError,
+                userId,
+              });
             }
           }
 
@@ -323,7 +329,10 @@ export class OpenAIService {
             videoMetadata.videoId
           );
         } catch (trackingError) {
-          logger.warn("Failed to track final summary usage", { trackingError, userId });
+          logger.warn("Failed to track final summary usage", {
+            trackingError,
+            userId,
+          });
         }
       }
 

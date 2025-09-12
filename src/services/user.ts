@@ -199,7 +199,9 @@ export class UserService {
         });
       } catch (error) {
         // Handle case where OpenAI usage table doesn't exist yet during migration
-        logger.warn("OpenAI usage table not accessible, using defaults", { userId });
+        logger.warn("OpenAI usage table not accessible, using defaults", {
+          userId,
+        });
       }
 
       const stats: UserStats = {
