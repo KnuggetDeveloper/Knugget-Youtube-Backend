@@ -1,7 +1,5 @@
 import { Request } from "express";
 import { User, UserPlan, SummaryStatus } from "@prisma/client";
-// LinkedIn and Website types exported conditionally based on feature flags
-// export { WebsiteSummary } from "@prisma/client";
 
 // API Response Types
 export interface ApiResponse<T = any> {
@@ -144,12 +142,7 @@ export interface UserProfile {
 
 export interface UserStats {
   totalSummaries: number;
-  // LinkedIn and Website stats - disabled but kept for future re-enablement
-  // totalLinkedinPosts: number;
-  // totalWebsiteSummaries: number;
   summariesThisMonth: number;
-  // linkedinPostsThisMonth: number;
-  // websiteSummariesThisMonth: number;
   creditsUsed: number;
   creditsRemaining: number;
   planStatus: UserPlan;
@@ -281,6 +274,120 @@ export const MAX_SUMMARY_HISTORY = 100; // per user
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
 
+// DODOpayment Types
+export interface DODOPaymentProduct {
+  product_id: string;
+  quantity: number;
+}
+
+export interface DODOPaymentCustomer {
+  customer_id?: string;
+  email?: string;
+  name?: string;
+  phone_number?: string;
+}
+
+export interface DODOPaymentBilling {
+  street: string;
+  city: string;
+  state: string;
+  country: string;
+  zipcode: string | number;
+}
+
+export interface DODOCheckoutSessionRequest {
+  product_cart: DODOPaymentProduct[];
+  customer?: DODOPaymentCustomer;
+  billing_address?: DODOPaymentBilling;
+  return_url?: string;
+  metadata?: Record<string, any>;
+  payment_link?: boolean;
+  allowed_payment_method_types?: string[];
+}
+
+export interface DODOCheckoutSessionResponse {
+  session_id: string;
+  checkout_url: string;
+}
+
+export interface DODOOneTimePaymentRequest {
+  billing: DODOPaymentBilling;
+  customer: DODOPaymentCustomer;
+  product_cart: DODOPaymentProduct[];
+  return_url?: string;
+  metadata?: Record<string, any>;
+  payment_link?: boolean;
+  allowed_payment_method_types?: string[];
+}
+
+export interface DODOOneTimePaymentResponse {
+  payment_id: string;
+  client_secret: string;
+  customer: DODOPaymentCustomer;
+  metadata: Record<string, any>;
+  total_amount: number;
+  payment_link?: string;
+  expires_on?: string;
+}
+
+export interface DODOSubscriptionRequest {
+  billing: DODOPaymentBilling;
+  customer: DODOPaymentCustomer;
+  product_id: string;
+  quantity: number;
+  return_url?: string;
+  metadata?: Record<string, any>;
+  payment_link?: boolean;
+  allowed_payment_method_types?: string[];
+  trial_period_days?: number;
+}
+
+export interface DODOSubscriptionResponse {
+  subscription_id: string;
+  payment_id: string;
+  customer: DODOPaymentCustomer;
+  metadata: Record<string, any>;
+  recurring_pre_tax_amount: number;
+  payment_link?: string;
+  expires_on?: string;
+  client_secret?: string;
+}
+
+export interface DODOWebhookEvent {
+  type:
+    | "payment.succeeded"
+    | "payment.completed"
+    | "payment.failed"
+    | "subscription.created"
+    | "subscription.cancelled"
+    | "subscription.payment_failed"
+    | "subscription.trial_ending";
+  data: {
+    id?: string;
+    payment_id?: string;
+    subscription_id?: string;
+    customer?: DODOPaymentCustomer;
+    amount?: number;
+    currency?: string;
+    status?: string;
+    metadata?: Record<string, any>;
+    [key: string]: any;
+  };
+}
+
+export interface CreateCheckoutSessionDto {
+  type: "one_time" | "subscription";
+  product_id: string;
+  quantity?: number;
+  return_url?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface PaymentWebhookDto {
+  event: DODOWebhookEvent;
+  signature: string;
+}
+
 // Re-export Prisma types
 export {
   User,
@@ -290,125 +397,3 @@ export {
   RefreshToken,
   VideoMetadata as PrismaVideoMetadata,
 } from "@prisma/client";
-
-// LinkedIn and Website types - disabled but kept for future re-enablement
-// Feature flags can re-enable these types when needed
-
-/*
-export interface LinkedinPostData {
-  id: string;
-  title?: string | null;
-  content: string;
-  author: string;
-  postUrl: string;
-  linkedinPostId?: string | null;
-  platform: string;
-  engagement?: {
-    likes?: number;
-    comments?: number;
-    shares?: number;
-  } | null;
-  metadata?: {
-    timestamp?: string;
-    source?: string;
-    [key: string]: any;
-  } | null;
-  savedAt: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SaveLinkedinPostDto {
-  title?: string;
-  content: string;
-  author: string;
-  postUrl: string;
-  linkedinPostId?: string;
-  platform?: string;
-  engagement?: {
-    likes?: number;
-    comments?: number;
-    shares?: number;
-  };
-  metadata?: {
-    timestamp?: string;
-    source?: string;
-    [key: string]: any;
-  };
-}
-
-export interface UpdateLinkedinPostDto {
-  title?: string;
-  content?: string;
-  author?: string;
-  engagement?: {
-    likes?: number;
-    comments?: number;
-    shares?: number;
-  };
-  metadata?: {
-    timestamp?: string;
-    source?: string;
-    [key: string]: any;
-  };
-}
-
-export interface LinkedinPostQueryParams {
-  page?: number;
-  limit?: number;
-  search?: string;
-  author?: string;
-  startDate?: string;
-  endDate?: string;
-  sortBy?: 'savedAt' | 'createdAt' | 'author' | 'title';
-  sortOrder?: 'asc' | 'desc';
-}
-
-export interface LinkedinPostStats {
-  totalPosts: number;
-  postsThisMonth: number;
-  postsThisWeek: number;
-  topAuthors: Array<{
-    author: string;
-    count: number;
-  }>;
-  recentActivity: Array<{
-    id: string;
-    title: string;
-    author: string;
-    savedAt: string;
-  }>;
-}
-
-//Website
-export interface WebsiteSummaryData {
-  id: string;
-  title: string;
-  content: string;
-  summary: string;
-  url: string;
-  websiteName: string;
-  faviconUrl?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateWebsiteSummaryDto {
-  title: string;
-  content: string;
-  url: string;
-}
-
-export interface WebsiteSummaryResponse {
-  id: string;
-  title: string;
-  content: string;
-  summary: string;
-  url: string;
-  websiteName: string;
-  faviconUrl?: string;
-  createdAt: string;
-  updatedAt: string;
-  isNew: boolean; // Indicates if this was freshly created or retrieved from DB
-}
-*/

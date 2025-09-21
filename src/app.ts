@@ -35,7 +35,6 @@ app.use(
       if (!origin) return callback(null, true);
 
       const allowedOrigins = [
-        "http://localhost:8000",
         "https://knugget-youtube-client.vercel.app",
         "chrome-extension://",
         "https://knugget-youtube-backend.onrender.com",
@@ -167,10 +166,8 @@ const startServer = async () => {
     await prisma.$connect();
     logger.info("Database connected successfully");
 
-    const server = app.listen(process.env.PORT || 3000, () => {
-      logger.info(
-        `🚀 Knugget API server running on port ${process.env.PORT || 3000}`
-      );
+    const server = app.listen(3000, () => {
+      logger.info(`🚀 Knugget API server running on port 3000`);
       logger.info(`📡 Environment: ${config.server.nodeEnv}`);
       logger.info(`🔗 API Base URL: ${config.server.apiBaseUrl}`);
       logger.info(`🌐 CORS Origins: ${config.cors.allowedOrigins.join(", ")}`);
@@ -181,6 +178,7 @@ const startServer = async () => {
       console.log("├── /api/auth/*");
       console.log("├── /api/summary/*");
       console.log("├── /api/user/*");
+      console.log("├── /api/payment/*");
       // console.log('└── /api/linkedin/*'); // This should appear!
     });
 
@@ -189,7 +187,7 @@ const startServer = async () => {
         throw error;
       }
 
-      const bind = `Port ${process.env.PORT || 3000}`;
+      const bind = `Port 3000`;
 
       switch (error.code) {
         case "EACCES":

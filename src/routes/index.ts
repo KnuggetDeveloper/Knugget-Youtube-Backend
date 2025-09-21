@@ -9,6 +9,7 @@ import { config } from "../config";
 import authRoutes from "./auth";
 import summaryRoutes from "./summary";
 import userRoutes from "./user";
+import paymentRoutes from "./payment";
 // LinkedIn and Website routes - conditionally imported based on feature flags
 // import linkedinRoutes from "./linkedin";
 // import websiteSummaryRoutes from "./website";
@@ -62,12 +63,14 @@ router.get("/", (req, res) => {
     data: {
       name: "Knugget AI API",
       version: "1.0.0",
-      description: "AI-powered content summarization API for YouTube videos, LinkedIn posts, and website articles",
+      description:
+        "AI-powered content summarization API for YouTube videos, LinkedIn posts, and website articles",
       environment: process.env.NODE_ENV,
       endpoints: {
         auth: "/api/auth",
         summary: "/api/summary",
         user: "/api/user",
+        payment: "/api/payment",
         // LinkedIn and Website endpoints disabled - can be re-enabled via feature flags
         // linkedin: "/api/linkedin",
         // website: "/api/website",
@@ -84,6 +87,7 @@ router.get("/", (req, res) => {
 router.use("/auth", authRoutes);
 router.use("/summary", summaryRoutes);
 router.use("/user", userRoutes);
+router.use("/payment", paymentRoutes);
 
 // LinkedIn and Website routes conditionally mounted based on feature flags
 // if (config.features.linkedin) {

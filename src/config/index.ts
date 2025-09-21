@@ -8,7 +8,7 @@ const configSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
-  API_BASE_URL: z.string().url().default("http://localhost:3000/api"),
+  API_BASE_URL: z.string().url().default("https://knugget-youtube-backend.onrender.com/api"),
 
   // Database
   DATABASE_URL: z.string().min(1),
@@ -30,6 +30,13 @@ const configSchema = z.object({
   OPENAI_MODEL: z.string().default("gpt-4-turbo-preview"),
   OPENAI_MAX_TOKENS: z.string().transform(Number).default("4000"),
 
+  // DODOpayment
+  DODO_PAYMENTS_API_KEY: z.string().min(1),
+  DODO_WEBHOOK_SECRET: z.string().min(1).optional(),
+  DODO_PAYMENTS_ENVIRONMENT: z.string().default("test_mode"),
+  PRODUCT_ID: z.string().min(1), // This should be a subscription product ID
+  FRONTEND_URL: z.string().url().default("https://knugget-youtube-client.vercel.app"),
+
   // Email (Optional)
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.string().transform(Number).optional(),
@@ -42,7 +49,7 @@ const configSchema = z.object({
   ALLOWED_ORIGINS: z
     .string()
     .default(
-      "http://localhost:8000,https://knugget-youtube-client.vercel.app,chrome-extension://,https://knugget-youtube-backend.onrender.com"
+      "https://knugget-youtube-client.vercel.app,chrome-extension://,https://knugget-youtube-backend.onrender.com"
     ),
 
   // Logging
@@ -97,6 +104,13 @@ export const config = {
     apiKey: parsed.data.OPENAI_API_KEY,
     model: parsed.data.OPENAI_MODEL,
     maxTokens: parsed.data.OPENAI_MAX_TOKENS,
+  },
+  payment: {
+    dodoApiKey: parsed.data.DODO_PAYMENTS_API_KEY,
+    webhookSecret: parsed.data.DODO_WEBHOOK_SECRET,
+    environment: parsed.data.DODO_PAYMENTS_ENVIRONMENT,
+    subscriptionProductId: parsed.data.PRODUCT_ID,
+    frontendUrl: parsed.data.FRONTEND_URL,
   },
   email: {
     host: parsed.data.SMTP_HOST,

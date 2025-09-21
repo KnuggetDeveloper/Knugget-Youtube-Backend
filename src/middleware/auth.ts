@@ -12,7 +12,7 @@ export const authenticate = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith("Bearer ")
@@ -24,7 +24,8 @@ export const authenticate = async (
         success: false,
         error: "Authorization token required",
       };
-      return res.status(401).json(response);
+      res.status(401).json(response);
+      return;
     }
 
     let payload: JwtPayload;
@@ -113,18 +114,19 @@ export const authenticate = async (
           throw new Error("User not found");
         }
       } catch (supabaseError) {
-        logger.error("Token verification failed", { 
+        logger.error("Token verification failed", {
           error: supabaseError,
           hasJWTError: !!jwtError,
-          userAgent: req.get('User-Agent'),
-          origin: req.get('Origin')
+          userAgent: req.get("User-Agent"),
+          origin: req.get("Origin"),
         });
-        
+
         const response: ApiResponse = {
           success: false,
           error: "Invalid or expired token",
         };
-        return res.status(401).json(response);
+        res.status(401).json(response);
+        return;
       }
     }
 
@@ -138,28 +140,34 @@ export const authenticate = async (
 
     next();
   } catch (error) {
-    logger.error("Authentication middleware error", { 
+    logger.error("Authentication middleware error", {
       error,
-      userAgent: req.get('User-Agent'),
-      origin: req.get('Origin')
+      userAgent: req.get("User-Agent"),
+      origin: req.get("Origin"),
     });
-    
+
     const response: ApiResponse = {
       success: false,
       error: "Authentication failed",
     };
-    return res.status(401).json(response);
+    res.status(401).json(response);
+    return;
   }
 };
 
 export const requirePlan = (requiredPlan: "FREE" | "PREMIUM") => {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  return (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction
+  ): void => {
     if (!req.user) {
       const response: ApiResponse = {
         success: false,
         error: "Authentication required",
       };
-      return res.status(401).json(response);
+      res.status(401).json(response);
+      return;
     }
 
     if (requiredPlan === "PREMIUM" && req.user.plan !== "PREMIUM") {
@@ -167,7 +175,8 @@ export const requirePlan = (requiredPlan: "FREE" | "PREMIUM") => {
         success: false,
         error: "Premium plan required",
       };
-      return res.status(403).json(response);
+      res.status(403).json(response);
+      return;
     }
 
     next();
@@ -175,13 +184,18 @@ export const requirePlan = (requiredPlan: "FREE" | "PREMIUM") => {
 };
 
 export const requireCredits = (requiredCredits: number = 1) => {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  return (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction
+  ): void => {
     if (!req.user) {
       const response: ApiResponse = {
         success: false,
         error: "Authentication required",
       };
-      return res.status(401).json(response);
+      res.status(401).json(response);
+      return;
     }
 
     if (req.user.credits < requiredCredits) {
@@ -189,7 +203,8 @@ export const requireCredits = (requiredCredits: number = 1) => {
         success: false,
         error: "Insufficient credits",
       };
-      return res.status(402).json(response);
+      res.status(402).json(response);
+      return;
     }
 
     next();
