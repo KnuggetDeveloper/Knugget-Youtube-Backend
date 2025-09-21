@@ -31,39 +31,4 @@ router.post(
   paymentController.handleWebhook.bind(paymentController)
 );
 
-/**
- * @route   POST /api/payment/test-webhook
- * @desc    Test webhook processing manually
- * @access  Public (for testing only)
- */
-router.post("/test-webhook", async (req, res) => {
-  try {
-    // Sample subscription created event
-    const testEvent = {
-      type: "subscription.created",
-      data: {
-        id: "sub_test_123",
-        subscription_id: "sub_test_123",
-        metadata: {
-          userId: req.body.userId, // Pass user ID in request body
-        },
-      },
-    };
-
-    const { paymentService } = require("../services/payment");
-    const result = await paymentService.handleWebhook(testEvent);
-
-    res.json({
-      success: true,
-      message: "Test webhook processed",
-      result,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
-});
-
 export default router;

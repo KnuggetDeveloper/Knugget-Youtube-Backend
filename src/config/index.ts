@@ -8,7 +8,10 @@ const configSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
-  API_BASE_URL: z.string().url().default("https://knugget-youtube-backend.onrender.com/api"),
+  API_BASE_URL: z
+    .string()
+    .url()
+    .default("https://knugget-youtube-backend.onrender.com/api"),
 
   // Database
   DATABASE_URL: z.string().min(1),
@@ -35,7 +38,10 @@ const configSchema = z.object({
   DODO_WEBHOOK_SECRET: z.string().min(1).optional(),
   DODO_PAYMENTS_ENVIRONMENT: z.string().default("test_mode"),
   PRODUCT_ID: z.string().min(1), // This should be a subscription product ID
-  FRONTEND_URL: z.string().url().default("https://knugget-youtube-client.vercel.app"),
+  FRONTEND_URL: z
+    .string()
+    .url()
+    .default("https://knugget-youtube-client.vercel.app"),
 
   // Email (Optional)
   SMTP_HOST: z.string().optional(),
