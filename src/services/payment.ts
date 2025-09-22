@@ -131,6 +131,10 @@ class PaymentService {
           logger.info("New subscription created:", event.data?.id);
           await this.handleSubscriptionCreated(event);
           break;
+        case "subscription.active":
+          logger.info("Subscription is active:", event.data?.id);
+          await this.handleSubscriptionActive(event);
+          break;
         case "subscription.cancelled":
           logger.info("Subscription cancelled:", event.data?.id);
           await this.handleSubscriptionCancelled(event);
@@ -250,6 +254,45 @@ class PaymentService {
       // Send welcome email
     } catch (error) {
       logger.error("Failed to activate new subscription", {
+        userId,
+        subscriptionId: event.data.subscription_id,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  /**
+   * Handle subscription active status
+   */
+  private async handleSubscriptionActive(
+    event: DODOWebhookEvent
+  ): Promise<void> {
+    const { metadata } = event.data;
+    const userId = metadata?.userId;
+
+    if (!userId) {
+      logger.warn("Subscription active but no userId in metadata", {
+        subscriptionId: event.data.subscription_id,
+      });
+      return;
+    }
+
+    try {
+      // Ensure user has access to subscription features
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          plan: UserPlan.PREMIUM,
+          credits: { increment: 1000 }, // Add premium credits
+        },
+      });
+
+      logger.info("Subscription confirmed active for user", {
+        userId,
+        subscriptionId: event.data.subscription_id,
+      });
+    } catch (error) {
+      logger.error("Failed to process active subscription", {
         userId,
         subscriptionId: event.data.subscription_id,
         error: error instanceof Error ? error.message : "Unknown error",

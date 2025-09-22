@@ -21,6 +21,7 @@ const webhookSchema = z.object({
     "payment.completed",
     "payment.failed",
     "subscription.created",
+    "subscription.active",
     "subscription.cancelled",
     "subscription.payment_failed",
     "subscription.trial_ending",
