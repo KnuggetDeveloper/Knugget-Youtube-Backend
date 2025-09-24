@@ -28,6 +28,9 @@ model User {
   plan    UserPlan @default(FREE)
   credits Int      @default(3)
 
+  // Subscription management
+  subscriptionId String? @unique // DodoPayments subscription ID
+
   // Supabase integration
   supabaseId String? @unique
 
@@ -42,6 +45,7 @@ model User {
   summaries     Summary[]
   refreshTokens RefreshToken[]
   openaiUsage   OpenAIUsage[]
+
   @@map("users")
 }
 

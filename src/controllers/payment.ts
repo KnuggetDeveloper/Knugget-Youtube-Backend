@@ -99,6 +99,47 @@ class PaymentController {
   }
 
   /**
+   * Cancel user's subscription
+   */
+  async cancelSubscription(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
+    try {
+      const user = req.user!;
+
+      logger.info("Processing subscription cancellation request", {
+        userId: user.id,
+      });
+
+      const result = await paymentService.cancelSubscription(user);
+
+      if (!result.success) {
+        res.status(result.statusCode || 500).json({
+          success: false,
+          error: result.error,
+        } as ApiResponse);
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Subscription will be cancelled at the end of the current billing period",
+      } as ApiResponse);
+    } catch (error) {
+      logger.error("Error cancelling subscription", {
+        userId: req.user?.id,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+
+      res.status(500).json({
+        success: false,
+        error: "Failed to cancel subscription",
+      } as ApiResponse);
+    }
+  }
+
+  /**
    * Handle subscription webhook
    */
   async handleWebhook(req: Request, res: Response): Promise<void> {

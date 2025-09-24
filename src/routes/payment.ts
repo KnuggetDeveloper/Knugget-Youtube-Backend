@@ -19,6 +19,17 @@ router.post(
 );
 
 /**
+ * @route   POST /api/payment/cancel-subscription
+ * @desc    Cancel user's subscription
+ * @access  Private (requires authentication)
+ */
+router.post(
+  "/cancel-subscription",
+  authenticate,
+  paymentController.cancelSubscription.bind(paymentController)
+);
+
+/**
  * @route   POST /api/payment/webhook
  * @desc    Handle DODOpayment subscription webhook events
  * @access  Public (webhook endpoint)

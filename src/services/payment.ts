@@ -107,6 +107,80 @@ class PaymentService {
   }
 
   /**
+   * Cancel a user's subscription
+   */
+  async cancelSubscription(user: AuthUser): Promise<ServiceResponse<void>> {
+    try {
+      logger.info("Cancelling subscription for user", {
+        userId: user.id,
+      });
+
+      // Get user's subscription ID from database
+      const userData = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { subscriptionId: true, plan: true },
+      });
+
+      if (!userData?.subscriptionId) {
+        logger.warn("No active subscription found for user", {
+          userId: user.id,
+        });
+        return {
+          success: false,
+          error: "No active subscription found",
+          statusCode: 404,
+        };
+      }
+
+      if (userData.plan !== UserPlan.PREMIUM) {
+        logger.warn("User is not on premium plan", {
+          userId: user.id,
+          currentPlan: userData.plan,
+        });
+        return {
+          success: false,
+          error: "No premium subscription to cancel",
+          statusCode: 400,
+        };
+      }
+
+      // Cancel subscription with DodoPayments
+      logger.info("Cancelling subscription with DodoPayments", {
+        userId: user.id,
+        subscriptionId: userData.subscriptionId,
+      });
+
+      const cancelledSubscription = await this.client.subscriptions.update(
+        userData.subscriptionId,
+        {
+          cancel_at_next_billing_date: true,
+        }
+      );
+
+      logger.info("Subscription cancelled successfully", {
+        userId: user.id,
+        subscriptionId: userData.subscriptionId,
+        cancelAtNextBilling: cancelledSubscription.cancel_at_next_billing_date,
+      });
+
+      return {
+        success: true,
+      };
+    } catch (error) {
+      logger.error("Failed to cancel subscription", {
+        userId: user.id,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+
+      return {
+        success: false,
+        error: "Failed to cancel subscription",
+        statusCode: 500,
+      };
+    }
+  }
+
+  /**
    * Handle subscription webhook events
    */
   async handleWebhook(event: DODOWebhookEvent): Promise<ServiceResponse<void>> {
@@ -229,33 +303,35 @@ class PaymentService {
   ): Promise<void> {
     const { metadata } = event.data;
     const userId = metadata?.userId;
+    const subscriptionId = event.data.subscription_id;
 
     if (!userId) {
       logger.warn("Subscription created but no userId in metadata", {
-        subscriptionId: event.data.subscription_id,
+        subscriptionId,
       });
       return;
     }
 
     try {
-      // Grant access to subscription features
+      // Grant access to subscription features and store subscription ID
       await prisma.user.update({
         where: { id: userId },
         data: {
           plan: UserPlan.PREMIUM,
           credits: { increment: 1000 }, // Add premium credits
+          subscriptionId, // Store DodoPayments subscription ID
         },
       });
 
       logger.info("New subscription activated for user", {
         userId,
-        subscriptionId: event.data.subscription_id,
+        subscriptionId,
       });
       // Send welcome email
     } catch (error) {
       logger.error("Failed to activate new subscription", {
         userId,
-        subscriptionId: event.data.subscription_id,
+        subscriptionId,
         error: error instanceof Error ? error.message : "Unknown error",
       });
     }
@@ -269,32 +345,34 @@ class PaymentService {
   ): Promise<void> {
     const { metadata } = event.data;
     const userId = metadata?.userId;
+    const subscriptionId = event.data.subscription_id;
 
     if (!userId) {
       logger.warn("Subscription active but no userId in metadata", {
-        subscriptionId: event.data.subscription_id,
+        subscriptionId,
       });
       return;
     }
 
     try {
-      // Ensure user has access to subscription features
+      // Ensure user has access to subscription features and store subscription ID
       await prisma.user.update({
         where: { id: userId },
         data: {
           plan: UserPlan.PREMIUM,
           credits: { increment: 1000 }, // Add premium credits
+          subscriptionId, // Store DodoPayments subscription ID
         },
       });
 
       logger.info("Subscription confirmed active for user", {
         userId,
-        subscriptionId: event.data.subscription_id,
+        subscriptionId,
       });
     } catch (error) {
       logger.error("Failed to process active subscription", {
         userId,
-        subscriptionId: event.data.subscription_id,
+        subscriptionId,
         error: error instanceof Error ? error.message : "Unknown error",
       });
     }
@@ -342,33 +420,35 @@ class PaymentService {
   ): Promise<void> {
     const { metadata } = event.data;
     const userId = metadata?.userId;
+    const subscriptionId = event.data.subscription_id;
 
     if (!userId) {
       logger.warn("Subscription cancelled but no userId in metadata", {
-        subscriptionId: event.data.subscription_id,
+        subscriptionId,
       });
       return;
     }
 
     try {
-      // Revoke access to subscription features
+      // Revoke access to subscription features and clear subscription ID
       await prisma.user.update({
         where: { id: userId },
         data: {
           plan: UserPlan.FREE,
           credits: 10, // Reset to free tier credits
+          subscriptionId: null, // Clear the subscription ID
         },
       });
 
       logger.info("User subscription cancelled", {
         userId,
-        subscriptionId: event.data.subscription_id,
+        subscriptionId,
       });
       // Send cancellation confirmation
     } catch (error) {
       logger.error("Failed to handle subscription cancellation", {
         userId,
-        subscriptionId: event.data.subscription_id,
+        subscriptionId,
         error: error instanceof Error ? error.message : "Unknown error",
       });
     }
