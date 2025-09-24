@@ -135,6 +135,7 @@ export interface UserProfile {
   avatar: string | null;
   plan: UserPlan;
   credits: number;
+  subscriptionId: string | null;
   emailVerified: boolean;
   createdAt: string;
   lastLoginAt: string | null;
@@ -362,7 +363,10 @@ export interface DODOWebhookEvent {
     | "subscription.active"
     | "subscription.cancelled"
     | "subscription.payment_failed"
-    | "subscription.trial_ending";
+    | "subscription.trial_ending"
+    | "subscription.renewed"
+    | "subscription.on_hold"
+    | "subscription.failed";
   data: {
     id?: string;
     payment_id?: string;

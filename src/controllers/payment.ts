@@ -25,6 +25,9 @@ const webhookSchema = z.object({
     "subscription.cancelled",
     "subscription.payment_failed",
     "subscription.trial_ending",
+    "subscription.renewed",
+    "subscription.on_hold",
+    "subscription.failed",
   ]),
   data: z
     .object({
@@ -124,7 +127,8 @@ class PaymentController {
 
       res.status(200).json({
         success: true,
-        message: "Subscription will be cancelled at the end of the current billing period",
+        message:
+          "Subscription will be cancelled at the end of the current billing period",
       } as ApiResponse);
     } catch (error) {
       logger.error("Error cancelling subscription", {

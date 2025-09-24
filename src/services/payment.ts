@@ -221,6 +221,18 @@ class PaymentService {
           logger.info("Trial ending soon:", event.data?.id);
           await this.handleTrialEnding(event);
           break;
+        case "subscription.renewed":
+          logger.info("Subscription renewed:", event.data?.id);
+          await this.handleSubscriptionRenewed(event);
+          break;
+        case "subscription.on_hold":
+          logger.info("Subscription on hold:", event.data?.id);
+          await this.handleSubscriptionOnHold(event);
+          break;
+        case "subscription.failed":
+          logger.info("Subscription creation failed:", event.data?.id);
+          await this.handleSubscriptionFailed(event);
+          break;
         default:
           logger.info("Unhandled webhook event type:", event.type);
       }
@@ -386,13 +398,48 @@ class PaymentService {
   ): Promise<void> {
     const { metadata } = event.data;
     const userId = metadata?.userId;
+    const subscriptionId = event.data.subscription_id;
 
-    if (userId) {
+    if (!userId) {
+      logger.warn("Subscription payment failed but no userId in metadata", {
+        subscriptionId,
+      });
+      return;
+    }
+
+    try {
+      // Get current user data to track failed attempts
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { plan: true, subscriptionId: true, email: true },
+      });
+
+      if (!user) {
+        logger.error("User not found for failed payment", { userId });
+        return;
+      }
+
       logger.warn("Recurring payment failed for user", {
         userId,
-        subscriptionId: event.data.subscription_id,
+        subscriptionId,
+        userEmail: user.email,
       });
-      // Maybe send dunning email
+
+      // For now, we keep them as premium but log the failure
+      // In a real-world scenario, you might:
+      // 1. Implement a grace period
+      // 2. Send dunning emails
+      // 3. Downgrade after multiple failures
+      // 4. Retry payment after a certain period
+
+      // Optional: Send payment failure notification to user
+      // await this.sendPaymentFailureNotification(user.email, subscriptionId);
+    } catch (error) {
+      logger.error("Failed to process subscription payment failure", {
+        userId,
+        subscriptionId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   }
 
@@ -447,6 +494,124 @@ class PaymentService {
       // Send cancellation confirmation
     } catch (error) {
       logger.error("Failed to handle subscription cancellation", {
+        userId,
+        subscriptionId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  /**
+   * Handle subscription renewal
+   */
+  private async handleSubscriptionRenewed(
+    event: DODOWebhookEvent
+  ): Promise<void> {
+    const { metadata } = event.data;
+    const userId = metadata?.userId;
+    const subscriptionId = event.data.subscription_id;
+
+    if (!userId) {
+      logger.warn("Subscription renewed but no userId in metadata", {
+        subscriptionId,
+      });
+      return;
+    }
+
+    try {
+      // Ensure user maintains premium access and add renewal credits
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          plan: UserPlan.PREMIUM,
+          credits: { increment: 1000 }, // Add premium credits for new billing period
+        },
+      });
+
+      logger.info("Subscription renewed for user", {
+        userId,
+        subscriptionId,
+      });
+    } catch (error) {
+      logger.error("Failed to process subscription renewal", {
+        userId,
+        subscriptionId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  /**
+   * Handle subscription on hold (failed renewal)
+   */
+  private async handleSubscriptionOnHold(
+    event: DODOWebhookEvent
+  ): Promise<void> {
+    const { metadata } = event.data;
+    const userId = metadata?.userId;
+    const subscriptionId = event.data.subscription_id;
+
+    if (!userId) {
+      logger.warn("Subscription on hold but no userId in metadata", {
+        subscriptionId,
+      });
+      return;
+    }
+
+    try {
+      // Keep user as premium but log the hold status
+      // Don't downgrade immediately - give them time to resolve payment
+      logger.warn("Subscription put on hold due to failed renewal", {
+        userId,
+        subscriptionId,
+      });
+
+      // Optionally send notification to user about payment failure
+      // You might want to implement grace period logic here
+    } catch (error) {
+      logger.error("Failed to process subscription on hold", {
+        userId,
+        subscriptionId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  /**
+   * Handle subscription creation failure
+   */
+  private async handleSubscriptionFailed(
+    event: DODOWebhookEvent
+  ): Promise<void> {
+    const { metadata } = event.data;
+    const userId = metadata?.userId;
+    const subscriptionId = event.data.subscription_id;
+
+    if (!userId) {
+      logger.warn("Subscription creation failed but no userId in metadata", {
+        subscriptionId,
+      });
+      return;
+    }
+
+    try {
+      // Ensure user remains on free plan
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          plan: UserPlan.FREE,
+          subscriptionId: null, // Clear any partial subscription ID
+        },
+      });
+
+      logger.error("Subscription creation failed for user", {
+        userId,
+        subscriptionId,
+      });
+
+      // Send notification to user about subscription failure
+    } catch (error) {
+      logger.error("Failed to process subscription creation failure", {
         userId,
         subscriptionId,
         error: error instanceof Error ? error.message : "Unknown error",
