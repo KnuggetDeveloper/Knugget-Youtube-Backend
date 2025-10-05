@@ -298,6 +298,15 @@ class PaymentController {
           .update(signedPayload, "utf8")
           .digest("base64");
 
+        // Debug logging (remove in production)
+        logger.info("Webhook signature debug", {
+          webhookId: webhookId?.slice(0, 10) + "...",
+          timestamp: webhookTimestamp,
+          payloadLength: payloadString.length,
+          expectedSig: expectedSignature.slice(0, 20) + "...",
+          receivedSig: webhookSignature.slice(0, 50) + "...",
+        });
+
         // DodoPayments sends signature in format: v1,signature1 v1,signature2
         const signatures = webhookSignature.split(" ");
         const isValidSignature = signatures.some((sig) => {
@@ -306,7 +315,10 @@ class PaymentController {
         });
 
         if (!isValidSignature) {
-          logger.error("Webhook signature verification failed");
+          logger.error("Webhook signature verification failed", {
+            expectedFormat: "v1,<signature>",
+            receivedFormat: signatures[0]?.split(",")[0] || "unknown",
+          });
           res.status(401).json({ error: "Invalid signature" });
           return;
         }
