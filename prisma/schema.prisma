@@ -29,7 +29,10 @@ model User {
   credits Int      @default(3)
 
   // Subscription management
-  subscriptionId String? @unique // DodoPayments subscription ID
+  subscriptionId      String?   @unique // DodoPayments subscription ID
+  subscriptionStatus  String?   @default("free") // Current subscription status
+  nextBillingDate     DateTime? // Next billing date from DodoPayments
+  cancelAtBillingDate Boolean   @default(false) // Will cancel at next billing
 
   // Supabase integration
   supabaseId String? @unique

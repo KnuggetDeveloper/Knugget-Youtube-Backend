@@ -1,15 +1,8 @@
-import DodoPayments from "dodopayments";
-import crypto from "crypto";
+import { PrismaClient, UserPlan } from "@prisma/client";
 import { config } from "../config";
 import { logger } from "../config/logger";
 import { prisma } from "../config/database";
-import {
-  DODOCheckoutSessionResponse,
-  DODOWebhookEvent,
-  ServiceResponse,
-  AuthUser,
-  UserPlan,
-} from "../types";
+import { ServiceResponse, AuthUser, DODOWebhookEvent } from "../types";
 
 interface PaymentConfig {
   subscriptionProductId: string;
@@ -17,114 +10,337 @@ interface PaymentConfig {
 }
 
 class PaymentService {
-  private client: DodoPayments;
+  private DODO_API_KEY = config.payment.dodoApiKey;
+  private DODO_BASE_URL = config.payment.dodoBaseUrl;
   private paymentConfig: PaymentConfig;
 
   constructor() {
-    // Initialize DODOpayment client
-    this.client = new DodoPayments({
-      bearerToken: config.payment.dodoApiKey,
-      environment: config.payment.environment as "test_mode" | "live_mode",
-    });
-
-    // Payment configuration
     this.paymentConfig = {
       subscriptionProductId: config.payment.subscriptionProductId,
       frontendUrl: config.payment.frontendUrl,
     };
 
     logger.info("PaymentService initialized", {
-      hasApiKey: !!config.payment.dodoApiKey,
-      webhookSecret: !!config.payment.webhookSecret,
-      environment: config.payment.environment,
+      hasApiKey: !!this.DODO_API_KEY,
+      baseUrl: this.DODO_BASE_URL,
       subscriptionProductId: this.paymentConfig.subscriptionProductId,
-      frontendUrl: config.payment.frontendUrl,
+      frontendUrl: this.paymentConfig.frontendUrl,
     });
   }
 
   /**
-   * Create a subscription checkout session
+   * Helper: Sync subscription from DodoPayments and update DB
+   */
+  async syncSubscriptionFromDodo(subscriptionId: string, email: string) {
+    try {
+      console.log(`🔄 Syncing subscription ${subscriptionId} for ${email}`);
+
+      const response = await fetch(
+        `${this.DODO_BASE_URL}/subscriptions/${subscriptionId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.DODO_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        console.error("Failed to fetch from DodoPayments");
+        return null;
+      }
+
+      const subscription = await response.json();
+      const dodoStatus = subscription.status;
+      const cancelAtNext = subscription.cancel_at_next_billing_date;
+      const nextBilling = new Date(subscription.next_billing_date);
+      const now = new Date();
+
+      // Determine user status based on DodoPayments response
+      let isPremium = false;
+      let dbStatus = "free";
+      let dbPlan: UserPlan = UserPlan.FREE;
+
+      // Scenario 1: Active subscription
+      if (dodoStatus === "active" && !cancelAtNext) {
+        isPremium = true;
+        dbStatus = "active";
+        dbPlan = UserPlan.PREMIUM;
+        console.log("✅ Status: ACTIVE - Full premium access");
+      }
+      // Scenario 2: Cancelling (grace period)
+      else if (dodoStatus === "active" && cancelAtNext) {
+        // Check if still in grace period
+        isPremium = nextBilling > now;
+        dbStatus = isPremium ? "cancelling" : "expired";
+        dbPlan = isPremium ? UserPlan.PREMIUM : UserPlan.FREE;
+        console.log(
+          `⚠️ Status: CANCELLING - Premium until ${nextBilling.toLocaleDateString()}`
+        );
+      }
+      // Scenario 3: Cancelled immediately
+      else if (dodoStatus === "cancelled") {
+        isPremium = false;
+        dbStatus = "expired";
+        dbPlan = UserPlan.FREE;
+        console.log("❌ Status: CANCELLED - No premium access");
+      }
+      // Other statuses (pending, paused, etc.)
+      else {
+        isPremium = false;
+        dbStatus = dodoStatus || "free";
+        dbPlan = UserPlan.FREE;
+        console.log(`📊 Status: ${dodoStatus.toUpperCase()}`);
+      }
+
+      console.log(`Final: ${email} → ${dbStatus} (premium: ${isPremium})`);
+
+      // Update database
+      const updatedUser = await prisma.user.update({
+        where: { email },
+        data: {
+          subscriptionId,
+          plan: dbPlan,
+          subscriptionStatus: dbStatus,
+          nextBillingDate: subscription.next_billing_date
+            ? new Date(subscription.next_billing_date)
+            : null,
+          cancelAtBillingDate: cancelAtNext,
+          updatedAt: new Date(),
+        },
+      });
+
+      // Return both DB data and full DodoPayments response
+      return {
+        user: updatedUser,
+        dodoPaymentsResponse: subscription,
+      };
+    } catch (error) {
+      console.error("Sync error:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Create subscription
    */
   async createSubscriptionCheckoutSession(
     user: AuthUser,
     metadata?: Record<string, any>
-  ): Promise<ServiceResponse<DODOCheckoutSessionResponse>> {
+  ): Promise<ServiceResponse<any>> {
     try {
-      logger.info("Creating subscription checkout session", {
+      console.log("📝 Creating subscription for:", {
         userId: user.id,
+        email: user.email,
+        name: user.name,
       });
 
-      const checkoutData = {
-        product_cart: [
-          {
-            product_id: this.paymentConfig.subscriptionProductId,
-            quantity: 1,
+      if (!user.id || !user.email || !user.name) {
+        return {
+          success: false,
+          error: "User ID, email, and name are required",
+          statusCode: 400,
+        };
+      }
+
+      const productId = this.paymentConfig.subscriptionProductId;
+      if (!productId || productId.trim() === "") {
+        return {
+          success: false,
+          error: "Product ID is required",
+          statusCode: 400,
+        };
+      }
+
+      console.log("🚀 Creating checkout with DodoPayments...");
+
+      // Create checkout session
+      const response = await fetch(`${this.DODO_BASE_URL}/checkouts`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.DODO_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          product_cart: [
+            {
+              product_id: productId.trim(),
+              quantity: 1,
+            },
+          ],
+          customer: { name: user.name, email: user.email },
+          return_url: `${this.paymentConfig.frontendUrl}/success`,
+        }),
+      });
+
+      const data = await response.json();
+
+      console.log("📊 DodoPayments response status:", response.status);
+      console.log(
+        "📊 DodoPayments response data:",
+        JSON.stringify(data, null, 2)
+      );
+
+      if (response.ok) {
+        console.log("✅ Checkout created successfully");
+
+        // Save to database
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            updatedAt: new Date(),
           },
-        ],
-        subscription_data: {
-          trial_period_days: 14, // 14-day free trial
-        },
-        show_saved_payment_methods: true,
-        return_url: `${this.paymentConfig.frontendUrl}/success`,
-        metadata: {
-          source: "web_subscription",
-          product_type: "subscription",
-          userId: user.id,
-          timestamp: new Date().toISOString(),
-          ...metadata,
-        },
-      };
+        });
 
-      logger.info("Creating subscription checkout session with data", {
-        userId: user.id,
-        productId: this.paymentConfig.subscriptionProductId,
-      });
-
-      const session = await this.client.checkoutSessions.create(checkoutData);
-
-      logger.info("Subscription checkout session created", {
-        userId: user.id,
-        sessionId: session.session_id,
-        checkoutUrl: session.checkout_url,
-      });
-
-      return {
-        success: true,
-        data: session,
-      };
+        return {
+          success: true,
+          data: {
+            checkout_url: data.checkout_url,
+            session_id: data.session_id,
+          },
+        };
+      } else {
+        console.error("❌ DodoPayments error:", data);
+        return {
+          success: false,
+          error: data,
+          statusCode: 400,
+        };
+      }
     } catch (error) {
-      logger.error("Failed to create subscription checkout session", {
-        userId: user.id,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-
+      console.error("💥 Server error:", error);
       return {
         success: false,
-        error: "Failed to create subscription checkout session",
+        error: error instanceof Error ? error.message : "Unknown error",
         statusCode: 500,
       };
     }
   }
 
   /**
-   * Cancel a user's subscription
+   * Get user subscription status (with auto-sync if needed)
    */
-  async cancelSubscription(user: AuthUser): Promise<ServiceResponse<void>> {
+  async getUserSubscriptionStatus(
+    user: AuthUser
+  ): Promise<ServiceResponse<any>> {
     try {
-      logger.info("Cancelling subscription for user", {
+      // Get user from database
+      const userData = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: {
+          subscriptionId: true,
+          plan: true,
+          email: true,
+          nextBillingDate: true,
+          subscriptionStatus: true,
+          cancelAtBillingDate: true,
+        },
+      });
+
+      if (!userData || !userData.subscriptionId) {
+        return {
+          success: true,
+          data: {
+            subscription: null,
+            message: "No active subscription",
+          },
+        };
+      }
+
+      // Check if billing date passed - if yes, sync from DodoPayments
+      const now = new Date();
+      const billingDate = userData.nextBillingDate
+        ? new Date(userData.nextBillingDate)
+        : null;
+
+      if (billingDate && billingDate <= now) {
+        console.log(`🔄 Billing date passed for ${userData.email}, syncing...`);
+        const synced = await this.syncSubscriptionFromDodo(
+          userData.subscriptionId,
+          userData.email
+        );
+
+        if (synced) {
+          // Return ORIGINAL DodoPayments response
+          return {
+            success: true,
+            data: {
+              subscription: synced.dodoPaymentsResponse,
+              synced: true,
+              message: "Subscription synced from DodoPayments",
+            },
+          };
+        }
+      }
+
+      // Fetch current status from DodoPayments (always return fresh data)
+      const response = await fetch(
+        `${this.DODO_BASE_URL}/subscriptions/${userData.subscriptionId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.DODO_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: "Failed to fetch subscription",
+          statusCode: 400,
+        };
+      }
+
+      const subscription = await response.json();
+
+      // Return ORIGINAL DodoPayments response
+      return {
+        success: true,
+        data: {
+          subscription: subscription,
+          synced: false,
+          message: "Current subscription status",
+          isPremium: subscription.status === "active",
+          status: subscription.status,
+          nextBillingDate: subscription.next_billing_date,
+          cancelAtBillingDate: subscription.cancel_at_next_billing_date,
+          subscriptionId: userData.subscriptionId,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        statusCode: 500,
+      };
+    }
+  }
+
+  /**
+   * Request subscription cancellation (sends email to admin)
+   */
+  async requestCancellation(user: AuthUser): Promise<ServiceResponse<any>> {
+    try {
+      logger.info("Processing cancellation request for user", {
         userId: user.id,
       });
 
-      // Get user's subscription ID from database
+      // Get user's subscription data
       const userData = await prisma.user.findUnique({
         where: { id: user.id },
-        select: { subscriptionId: true, plan: true },
+        select: {
+          subscriptionId: true,
+          plan: true,
+          email: true,
+          name: true,
+          subscriptionStatus: true,
+          nextBillingDate: true,
+          cancelAtBillingDate: true,
+        },
       });
 
-      if (!userData?.subscriptionId) {
-        logger.warn("No active subscription found for user", {
-          userId: user.id,
-        });
+      if (!userData?.subscriptionId || userData.plan !== UserPlan.PREMIUM) {
         return {
           success: false,
           error: "No active subscription found",
@@ -132,524 +348,174 @@ class PaymentService {
         };
       }
 
-      if (userData.plan !== UserPlan.PREMIUM) {
-        logger.warn("User is not on premium plan", {
-          userId: user.id,
-          currentPlan: userData.plan,
-        });
+      // Get subscription details from DodoPayments
+      const response = await fetch(
+        `${this.DODO_BASE_URL}/subscriptions/${userData.subscriptionId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.DODO_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
         return {
           success: false,
-          error: "No premium subscription to cancel",
+          error: "Failed to fetch subscription details",
           statusCode: 400,
         };
       }
 
-      // Cancel subscription with DodoPayments
-      logger.info("Cancelling subscription with DodoPayments", {
-        userId: user.id,
-        subscriptionId: userData.subscriptionId,
+      const subscription = await response.json();
+
+      // Mark as cancellation requested in database
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          subscriptionStatus: "cancellation_requested",
+          updatedAt: new Date(),
+        },
       });
 
-      const cancelledSubscription = await this.client.subscriptions.update(
-        userData.subscriptionId,
-        {
-          cancel_at_next_billing_date: true,
-        }
-      );
+      // Console log for admin (in production, send email)
+      console.log(`
+🚨 SUBSCRIPTION CANCELLATION REQUEST
+=====================================
+User: ${userData.name} (${userData.email})
+User ID: ${user.id}
+Subscription ID: ${userData.subscriptionId}
+Next Billing: ${
+        subscription.next_billing_date
+          ? new Date(subscription.next_billing_date).toLocaleDateString()
+          : "Unknown"
+      }
+Requested At: ${new Date().toLocaleString()}
 
-      logger.info("Subscription cancelled successfully", {
-        userId: user.id,
-        subscriptionId: userData.subscriptionId,
-        cancelAtNextBilling: cancelledSubscription.cancel_at_next_billing_date,
-      });
+ACTION REQUIRED: Please cancel this subscription in DodoPayments dashboard.
+User will keep premium access until next billing date.
+=====================================
+      `);
 
       return {
         success: true,
+        data: {
+          message:
+            "Cancellation request submitted. You will keep premium access until your next billing date. We will process your request within 24 hours.",
+          nextBillingDate: subscription.next_billing_date,
+        },
       };
     } catch (error) {
-      logger.error("Failed to cancel subscription", {
+      logger.error("Failed to process cancellation request", {
         userId: user.id,
         error: error instanceof Error ? error.message : "Unknown error",
       });
 
       return {
         success: false,
-        error: "Failed to cancel subscription",
+        error: "Failed to process cancellation request",
         statusCode: 500,
       };
     }
   }
 
   /**
-   * Handle subscription webhook events
+   * Handle webhook events - auto-sync when you cancel from dashboard
    */
   async handleWebhook(event: DODOWebhookEvent): Promise<ServiceResponse<void>> {
     try {
-      logger.info("Processing subscription webhook", {
-        type: event.type,
-        id: event.data?.id,
-        metadata: event.data?.metadata,
-      });
+      console.log("=== WEBHOOK RECEIVED ===");
+      console.log("Event Type:", event.type);
+      console.log("Subscription ID:", event.data?.subscription_id);
+      console.log("Customer Email:", event.data?.customer?.email);
+      console.log("Status:", event.data?.status);
+      console.log("======================");
 
-      switch (event.type) {
-        case "payment.succeeded":
-        case "payment.completed":
-          logger.info("Subscription payment successful:", event.data?.id);
-          await this.handlePaymentSucceeded(event);
-          break;
-        case "payment.failed":
-          logger.info("Subscription payment failed:", event.data?.id);
-          await this.handlePaymentFailed(event);
-          break;
-        case "subscription.created":
-          logger.info("New subscription created:", event.data?.id);
-          await this.handleSubscriptionCreated(event);
-          break;
-        case "subscription.active":
-          logger.info("Subscription is active:", event.data?.id);
-          await this.handleSubscriptionActive(event);
-          break;
-        case "subscription.cancelled":
-          logger.info("Subscription cancelled:", event.data?.id);
-          await this.handleSubscriptionCancelled(event);
-          break;
-        case "subscription.payment_failed":
-          logger.info("Recurring payment failed:", event.data?.id);
-          await this.handleSubscriptionPaymentFailed(event);
-          break;
-        case "subscription.trial_ending":
-          logger.info("Trial ending soon:", event.data?.id);
-          await this.handleTrialEnding(event);
-          break;
-        case "subscription.renewed":
-          logger.info("Subscription renewed:", event.data?.id);
-          await this.handleSubscriptionRenewed(event);
-          break;
-        case "subscription.on_hold":
-          logger.info("Subscription on hold:", event.data?.id);
-          await this.handleSubscriptionOnHold(event);
-          break;
-        case "subscription.failed":
-          logger.info("Subscription creation failed:", event.data?.id);
-          await this.handleSubscriptionFailed(event);
-          break;
-        default:
-          logger.info("Unhandled webhook event type:", event.type);
+      const subscriptionId = event.data?.subscription_id;
+      const customerEmail = event.data?.customer?.email;
+
+      if (!subscriptionId || !customerEmail) {
+        return { success: true };
       }
 
-      return {
-        success: true,
-      };
-    } catch (error) {
-      logger.error("Failed to handle webhook", {
-        type: event.type,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+      // Sync from DodoPayments
+      await this.syncSubscriptionFromDodo(subscriptionId, customerEmail);
 
+      return { success: true };
+    } catch (error) {
+      console.error("Webhook error:", error);
       return {
         success: false,
-        error: "Failed to handle webhook",
+        error: error instanceof Error ? error.message : "Unknown error",
         statusCode: 500,
       };
     }
   }
 
   /**
-   * Handle successful subscription payment
+   * Handle success redirect
    */
-  private async handlePaymentSucceeded(event: DODOWebhookEvent): Promise<void> {
-    const { metadata } = event.data;
-    const userId = metadata?.userId;
-
-    if (!userId) {
-      logger.warn("Subscription payment succeeded but no userId in metadata", {
-        paymentId: event.data.payment_id,
-      });
-      return;
-    }
-
+  async handleSuccessRedirect(subscriptionId: string): Promise<void> {
     try {
-      // Grant/renew access to subscription features
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          plan: UserPlan.PREMIUM,
-          credits: { increment: 1000 }, // Add premium credits
-        },
-      });
+      console.log("Success redirect:", { subscriptionId });
 
-      logger.info("User subscription payment successful", {
-        userId,
-        paymentId: event.data.payment_id,
-      });
-    } catch (error) {
-      logger.error("Failed to process successful subscription payment", {
-        userId,
-        paymentId: event.data.payment_id,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
+      if (subscriptionId) {
+        const response = await fetch(
+          `${this.DODO_BASE_URL}/subscriptions/${subscriptionId}`,
+          {
+            headers: { Authorization: `Bearer ${this.DODO_API_KEY}` },
+          }
+        );
 
-  /**
-   * Handle failed subscription payment
-   */
-  private async handlePaymentFailed(event: DODOWebhookEvent): Promise<void> {
-    const { metadata } = event.data;
-    const userId = metadata?.userId;
+        if (response.ok) {
+          const subscription = await response.json();
+          const customerEmail = subscription.customer?.email;
 
-    if (userId) {
-      logger.warn("Subscription payment failed for user", {
-        userId,
-        paymentId: event.data.payment_id,
-      });
-      // Maybe send notification to customer
-    }
-  }
-
-  /**
-   * Handle new subscription created
-   */
-  private async handleSubscriptionCreated(
-    event: DODOWebhookEvent
-  ): Promise<void> {
-    const { metadata } = event.data;
-    const userId = metadata?.userId;
-    const subscriptionId = event.data.subscription_id;
-
-    if (!userId) {
-      logger.warn("Subscription created but no userId in metadata", {
-        subscriptionId,
-      });
-      return;
-    }
-
-    try {
-      // Grant access to subscription features and store subscription ID
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          plan: UserPlan.PREMIUM,
-          credits: { increment: 1000 }, // Add premium credits
-          subscriptionId, // Store DodoPayments subscription ID
-        },
-      });
-
-      logger.info("New subscription activated for user", {
-        userId,
-        subscriptionId,
-      });
-      // Send welcome email
-    } catch (error) {
-      logger.error("Failed to activate new subscription", {
-        userId,
-        subscriptionId,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
-
-  /**
-   * Handle subscription active status
-   */
-  private async handleSubscriptionActive(
-    event: DODOWebhookEvent
-  ): Promise<void> {
-    const { metadata } = event.data;
-    const userId = metadata?.userId;
-    const subscriptionId = event.data.subscription_id;
-
-    if (!userId) {
-      logger.warn("Subscription active but no userId in metadata", {
-        subscriptionId,
-      });
-      return;
-    }
-
-    try {
-      // Ensure user has access to subscription features and store subscription ID
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          plan: UserPlan.PREMIUM,
-          credits: { increment: 1000 }, // Add premium credits
-          subscriptionId, // Store DodoPayments subscription ID
-        },
-      });
-
-      logger.info("Subscription confirmed active for user", {
-        userId,
-        subscriptionId,
-      });
-    } catch (error) {
-      logger.error("Failed to process active subscription", {
-        userId,
-        subscriptionId,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
-
-  /**
-   * Handle subscription payment failed
-   */
-  private async handleSubscriptionPaymentFailed(
-    event: DODOWebhookEvent
-  ): Promise<void> {
-    const { metadata } = event.data;
-    const userId = metadata?.userId;
-    const subscriptionId = event.data.subscription_id;
-
-    if (!userId) {
-      logger.warn("Subscription payment failed but no userId in metadata", {
-        subscriptionId,
-      });
-      return;
-    }
-
-    try {
-      // Get current user data to track failed attempts
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { plan: true, subscriptionId: true, email: true },
-      });
-
-      if (!user) {
-        logger.error("User not found for failed payment", { userId });
-        return;
-      }
-
-      logger.warn("Recurring payment failed for user", {
-        userId,
-        subscriptionId,
-        userEmail: user.email,
-      });
-
-      // For now, we keep them as premium but log the failure
-      // In a real-world scenario, you might:
-      // 1. Implement a grace period
-      // 2. Send dunning emails
-      // 3. Downgrade after multiple failures
-      // 4. Retry payment after a certain period
-
-      // Optional: Send payment failure notification to user
-      // await this.sendPaymentFailureNotification(user.email, subscriptionId);
-    } catch (error) {
-      logger.error("Failed to process subscription payment failure", {
-        userId,
-        subscriptionId,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
-
-  /**
-   * Handle trial ending
-   */
-  private async handleTrialEnding(event: DODOWebhookEvent): Promise<void> {
-    const { metadata } = event.data;
-    const userId = metadata?.userId;
-
-    if (userId) {
-      logger.info("Trial ending soon for user", {
-        userId,
-        subscriptionId: event.data.subscription_id,
-      });
-      // Send trial ending notification
-    }
-  }
-
-  /**
-   * Handle subscription cancellation
-   */
-  private async handleSubscriptionCancelled(
-    event: DODOWebhookEvent
-  ): Promise<void> {
-    const { metadata } = event.data;
-    const userId = metadata?.userId;
-    const subscriptionId = event.data.subscription_id;
-
-    if (!userId) {
-      logger.warn("Subscription cancelled but no userId in metadata", {
-        subscriptionId,
-      });
-      return;
-    }
-
-    try {
-      // Revoke access to subscription features and clear subscription ID
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          plan: UserPlan.FREE,
-          credits: 10, // Reset to free tier credits
-          subscriptionId: null, // Clear the subscription ID
-        },
-      });
-
-      logger.info("User subscription cancelled", {
-        userId,
-        subscriptionId,
-      });
-      // Send cancellation confirmation
-    } catch (error) {
-      logger.error("Failed to handle subscription cancellation", {
-        userId,
-        subscriptionId,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
-
-  /**
-   * Handle subscription renewal
-   */
-  private async handleSubscriptionRenewed(
-    event: DODOWebhookEvent
-  ): Promise<void> {
-    const { metadata } = event.data;
-    const userId = metadata?.userId;
-    const subscriptionId = event.data.subscription_id;
-
-    if (!userId) {
-      logger.warn("Subscription renewed but no userId in metadata", {
-        subscriptionId,
-      });
-      return;
-    }
-
-    try {
-      // Ensure user maintains premium access and add renewal credits
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          plan: UserPlan.PREMIUM,
-          credits: { increment: 1000 }, // Add premium credits for new billing period
-        },
-      });
-
-      logger.info("Subscription renewed for user", {
-        userId,
-        subscriptionId,
-      });
-    } catch (error) {
-      logger.error("Failed to process subscription renewal", {
-        userId,
-        subscriptionId,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
-
-  /**
-   * Handle subscription on hold (failed renewal)
-   */
-  private async handleSubscriptionOnHold(
-    event: DODOWebhookEvent
-  ): Promise<void> {
-    const { metadata } = event.data;
-    const userId = metadata?.userId;
-    const subscriptionId = event.data.subscription_id;
-
-    if (!userId) {
-      logger.warn("Subscription on hold but no userId in metadata", {
-        subscriptionId,
-      });
-      return;
-    }
-
-    try {
-      // Keep user as premium but log the hold status
-      // Don't downgrade immediately - give them time to resolve payment
-      logger.warn("Subscription put on hold due to failed renewal", {
-        userId,
-        subscriptionId,
-      });
-
-      // Optionally send notification to user about payment failure
-      // You might want to implement grace period logic here
-    } catch (error) {
-      logger.error("Failed to process subscription on hold", {
-        userId,
-        subscriptionId,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
-
-  /**
-   * Handle subscription creation failure
-   */
-  private async handleSubscriptionFailed(
-    event: DODOWebhookEvent
-  ): Promise<void> {
-    const { metadata } = event.data;
-    const userId = metadata?.userId;
-    const subscriptionId = event.data.subscription_id;
-
-    if (!userId) {
-      logger.warn("Subscription creation failed but no userId in metadata", {
-        subscriptionId,
-      });
-      return;
-    }
-
-    try {
-      // Ensure user remains on free plan
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          plan: UserPlan.FREE,
-          subscriptionId: null, // Clear any partial subscription ID
-        },
-      });
-
-      logger.error("Subscription creation failed for user", {
-        userId,
-        subscriptionId,
-      });
-
-      // Send notification to user about subscription failure
-    } catch (error) {
-      logger.error("Failed to process subscription creation failure", {
-        userId,
-        subscriptionId,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
-
-  /**
-   * Verify webhook signature using DODOpayment's signature verification
-   */
-  verifyWebhookSignature(payload: string, signature: string): boolean {
-    try {
-      if (!config.payment.webhookSecret) {
-        logger.error("Webhook secret not configured");
-        return false;
-      }
-
-      // Verify webhook signature
-      if (signature && config.payment.webhookSecret) {
-        const expectedSignature = crypto
-          .createHmac("sha256", config.payment.webhookSecret)
-          .update(payload)
-          .digest("hex");
-
-        const providedSignature = (signature as string).replace("sha256=", "");
-
-        if (expectedSignature !== providedSignature) {
-          logger.error("Webhook signature verification failed");
-          return false;
+          if (customerEmail) {
+            await this.syncSubscriptionFromDodo(subscriptionId, customerEmail);
+            console.log("Subscription activated via redirect:", subscriptionId);
+          }
         }
       }
-
-      return true;
     } catch (error) {
-      logger.error("Webhook signature verification failed", {
+      console.error("Error in success redirect:", error);
+    }
+  }
+
+  /**
+   * Manual sync endpoint (for admin use)
+   */
+  async syncSubscription(
+    subscriptionId: string,
+    email: string
+  ): Promise<ServiceResponse<any>> {
+    try {
+      console.log(`🔄 Manual sync requested for: ${subscriptionId}`);
+
+      const synced = await this.syncSubscriptionFromDodo(subscriptionId, email);
+
+      if (!synced) {
+        return {
+          success: false,
+          error: "Failed to sync subscription",
+          statusCode: 400,
+        };
+      }
+
+      return {
+        success: true,
+        data: {
+          message: `Subscription synced: ${synced.user.subscriptionStatus}`,
+          subscription: synced.dodoPaymentsResponse,
+        },
+      };
+    } catch (error) {
+      console.error("Sync error:", error);
+      return {
+        success: false,
         error: error instanceof Error ? error.message : "Unknown error",
-      });
-      return false;
+        statusCode: 500,
+      };
     }
   }
 }

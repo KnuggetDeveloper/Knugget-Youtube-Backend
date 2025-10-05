@@ -45,6 +45,9 @@ export const authenticate = async (
           plan: true,
           credits: true,
           subscriptionId: true,
+          subscriptionStatus: true,
+          nextBillingDate: true,
+          cancelAtBillingDate: true,
           emailVerified: true,
           createdAt: true,
           updatedAt: true,
@@ -77,6 +80,9 @@ export const authenticate = async (
             plan: true,
             credits: true,
             subscriptionId: true,
+            subscriptionStatus: true,
+            nextBillingDate: true,
+            cancelAtBillingDate: true,
             emailVerified: true,
             createdAt: true,
             updatedAt: true,
@@ -95,6 +101,9 @@ export const authenticate = async (
               plan: "FREE",
               credits: 3,
               subscriptionId: null,
+              subscriptionStatus: "free",
+              nextBillingDate: null,
+              cancelAtBillingDate: false,
               supabaseId: supabaseUser.user.id,
               emailVerified: !!supabaseUser.user.email_confirmed_at,
               lastLoginAt: new Date(),
@@ -107,6 +116,9 @@ export const authenticate = async (
               plan: true,
               credits: true,
               subscriptionId: true,
+              subscriptionStatus: true,
+              nextBillingDate: true,
+              cancelAtBillingDate: true,
               emailVerified: true,
               createdAt: true,
               updatedAt: true,
@@ -136,7 +148,7 @@ export const authenticate = async (
       }
     }
 
-    // FIXED: Format user data consistently
+    // Format user data consistentl
     req.user = {
       ...user,
       createdAt: user.createdAt.toISOString(),

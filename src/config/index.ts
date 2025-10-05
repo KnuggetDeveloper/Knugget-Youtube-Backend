@@ -35,6 +35,7 @@ const configSchema = z.object({
 
   // DODOpayment
   DODO_PAYMENTS_API_KEY: z.string().min(1),
+  DODO_BASE_URL: z.string().url().default("https://test.dodopayments.com"),
   DODO_WEBHOOK_SECRET: z.string().min(1).optional(),
   DODO_PAYMENTS_ENVIRONMENT: z.string().default("test_mode"),
   PRODUCT_ID: z.string().min(1), // This should be a subscription product ID
@@ -113,6 +114,7 @@ export const config = {
   },
   payment: {
     dodoApiKey: parsed.data.DODO_PAYMENTS_API_KEY,
+    dodoBaseUrl: parsed.data.DODO_BASE_URL,
     webhookSecret: parsed.data.DODO_WEBHOOK_SECRET,
     environment: parsed.data.DODO_PAYMENTS_ENVIRONMENT,
     subscriptionProductId: parsed.data.PRODUCT_ID,

@@ -102,9 +102,9 @@ class PaymentController {
   }
 
   /**
-   * Cancel user's subscription
+   * Request subscription cancellation (sends email to admin)
    */
-  async cancelSubscription(
+  async requestCancellation(
     req: AuthenticatedRequest,
     res: Response
   ): Promise<void> {
@@ -115,7 +115,7 @@ class PaymentController {
         userId: user.id,
       });
 
-      const result = await paymentService.cancelSubscription(user);
+      const result = await paymentService.requestCancellation(user);
 
       if (!result.success) {
         res.status(result.statusCode || 500).json({
@@ -127,19 +127,128 @@ class PaymentController {
 
       res.status(200).json({
         success: true,
+        data: result.data,
         message:
-          "Subscription will be cancelled at the end of the current billing period",
+          result.data?.message || "Cancellation request submitted successfully",
       } as ApiResponse);
     } catch (error) {
-      logger.error("Error cancelling subscription", {
+      logger.error("Error processing cancellation request", {
         userId: req.user?.id,
         error: error instanceof Error ? error.message : "Unknown error",
       });
 
       res.status(500).json({
         success: false,
-        error: "Failed to cancel subscription",
+        error: "Failed to process cancellation request",
       } as ApiResponse);
+    }
+  }
+
+  /**
+   * Get user subscription status
+   */
+  async getSubscriptionStatus(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
+    try {
+      const user = req.user!;
+
+      logger.info("Getting subscription status", {
+        userId: user.id,
+      });
+
+      const result = await paymentService.getUserSubscriptionStatus(user);
+
+      if (!result.success) {
+        res.status(result.statusCode || 500).json({
+          success: false,
+          error: result.error,
+        } as ApiResponse);
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        data: result.data,
+      } as ApiResponse);
+    } catch (error) {
+      logger.error("Error getting subscription status", {
+        userId: req.user?.id,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+
+      res.status(500).json({
+        success: false,
+        error: "Failed to get subscription status",
+      } as ApiResponse);
+    }
+  }
+
+  /**
+   * Manual sync endpoint (for admin use)
+   */
+  async syncSubscription(req: Request, res: Response): Promise<void> {
+    try {
+      const { subscriptionId } = req.params;
+      const { email } = req.body;
+
+      if (!email) {
+        res.status(400).json({
+          success: false,
+          error: "Email required for sync",
+        } as ApiResponse);
+        return;
+      }
+
+      console.log(`🔄 Manual sync requested for: ${subscriptionId}`);
+
+      const result = await paymentService.syncSubscription(
+        subscriptionId,
+        email
+      );
+
+      if (!result.success) {
+        res.status(result.statusCode || 400).json({
+          success: false,
+          error: result.error,
+        } as ApiResponse);
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        data: result.data,
+      } as ApiResponse);
+    } catch (error) {
+      console.error("Sync error:", error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      } as ApiResponse);
+    }
+  }
+
+  /**
+   * Handle success redirect from DodoPayments
+   */
+  async handleSuccessRedirect(req: Request, res: Response): Promise<void> {
+    try {
+      const { subscription_id, status } = req.query;
+
+      if (subscription_id && status === "active") {
+        await paymentService.handleSuccessRedirect(subscription_id as string);
+      }
+
+      // Redirect to frontend success page
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+      res.redirect(
+        `${frontendUrl}/success?subscription_id=${subscription_id}&status=${status}`
+      );
+    } catch (error) {
+      logger.error("Error handling success redirect", { error });
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+      res.redirect(`${frontendUrl}/error`);
     }
   }
 
@@ -156,19 +265,6 @@ class PaymentController {
         signature: signature ? "present" : "missing",
         payloadSize: payload.length,
       });
-
-      // Verify webhook signature
-      if (
-        signature &&
-        !paymentService.verifyWebhookSignature(
-          payload.toString(),
-          signature as string
-        )
-      ) {
-        logger.error("Webhook signature verification failed");
-        res.status(401).json({ error: "Invalid signature" });
-        return;
-      }
 
       // Parse the payload
       let event;
