@@ -13,6 +13,7 @@ class PaymentService {
   private DODO_API_KEY = config.payment.dodoApiKey;
   private DODO_BASE_URL = config.payment.dodoBaseUrl;
   private paymentConfig: PaymentConfig;
+  private processedWebhooks = new Set<string>(); // Deduplication by webhook-id
 
   constructor() {
     this.paymentConfig = {
@@ -420,12 +421,29 @@ User will keep premium access until next billing date.
   }
 
   /**
-   * Handle webhook events - auto-sync when you cancel from dashboard
+   * Handle webhook events with proper deduplication
    */
-  async handleWebhook(event: DODOWebhookEvent): Promise<ServiceResponse<void>> {
+  async handleWebhook(
+    event: DODOWebhookEvent,
+    webhookId: string
+  ): Promise<ServiceResponse<void>> {
     try {
+      // Deduplication: Use webhook-id to prevent duplicate processing
+      if (this.processedWebhooks.has(webhookId)) {
+        console.log(`⚠️ Webhook ${webhookId} already processed, skipping`);
+        return { success: true };
+      }
+
+      this.processedWebhooks.add(webhookId);
+
+      // Auto-cleanup after 24 hours (DodoPayments retry window)
+      setTimeout(() => {
+        this.processedWebhooks.delete(webhookId);
+      }, 24 * 60 * 60 * 1000);
+
       console.log("=== WEBHOOK RECEIVED ===");
       console.log("Event Type:", event.type);
+      console.log("Webhook ID:", webhookId);
       console.log("Subscription ID:", event.data?.subscription_id);
       console.log("Customer Email:", event.data?.customer?.email);
       console.log("Status:", event.data?.status);
@@ -444,6 +462,8 @@ User will keep premium access until next billing date.
       return { success: true };
     } catch (error) {
       console.error("Webhook error:", error);
+      // Remove from processed set on error so it can be retried
+      this.processedWebhooks.delete(webhookId);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",

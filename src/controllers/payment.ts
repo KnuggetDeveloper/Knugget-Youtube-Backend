@@ -257,16 +257,68 @@ class PaymentController {
    */
   async handleWebhook(req: Request, res: Response): Promise<void> {
     try {
-      const signature =
-        req.headers["dodo-signature"] || req.headers["x-dodo-signature"];
+      const webhookId = req.headers["webhook-id"] as string;
+      const webhookSignature = req.headers["webhook-signature"] as string;
+      const webhookTimestamp = req.headers["webhook-timestamp"] as string;
       const payload = req.body;
 
       logger.info("Webhook received", {
-        signature: signature ? "present" : "missing",
-        payloadSize: payload.length,
+        webhookId: webhookId ? "present" : "missing",
+        signature: webhookSignature ? "present" : "missing",
+        timestamp: webhookTimestamp ? "present" : "missing",
       });
 
-      // Parse the payload
+      // CRITICAL: Verify webhook signature using Standard Webhooks spec
+      if (!webhookId || !webhookSignature || !webhookTimestamp) {
+        logger.error("Webhook missing required headers", {
+          webhookId: !!webhookId,
+          signature: !!webhookSignature,
+          timestamp: !!webhookTimestamp,
+        });
+        res.status(401).json({ error: "Missing required webhook headers" });
+        return;
+      }
+
+      // Verify signature using DodoPayments Standard Webhooks
+      const webhookSecret = process.env.DODO_WEBHOOK_SECRET;
+      if (!webhookSecret) {
+        logger.error("Webhook secret not configured");
+        res.status(500).json({ error: "Webhook secret not configured" });
+        return;
+      }
+
+      try {
+        // Standard Webhooks verification: webhook-id.webhook-timestamp.payload
+        const payloadString = JSON.stringify(payload);
+        const signedPayload = `${webhookId}.${webhookTimestamp}.${payloadString}`;
+
+        const crypto = require("crypto");
+        const expectedSignature = crypto
+          .createHmac("sha256", webhookSecret)
+          .update(signedPayload, "utf8")
+          .digest("base64");
+
+        // DodoPayments sends signature in format: v1,signature1 v1,signature2
+        const signatures = webhookSignature.split(" ");
+        const isValidSignature = signatures.some((sig) => {
+          const [version, signature] = sig.split(",");
+          return version === "v1" && signature === expectedSignature;
+        });
+
+        if (!isValidSignature) {
+          logger.error("Webhook signature verification failed");
+          res.status(401).json({ error: "Invalid signature" });
+          return;
+        }
+      } catch (verifyError) {
+        logger.error("Webhook signature verification error", {
+          error: verifyError,
+        });
+        res.status(401).json({ error: "Signature verification failed" });
+        return;
+      }
+
+      // Parse and validate payload
       let event;
       try {
         event = typeof payload === "string" ? JSON.parse(payload) : payload;
@@ -276,10 +328,13 @@ class PaymentController {
         return;
       }
 
-      logger.info("Webhook event:", event.type, "for:", event.data?.id);
-      logger.info("Event metadata:", event.data?.metadata);
+      logger.info("Webhook event verified:", {
+        type: event.type,
+        webhookId,
+        businessId: event.business_id,
+      });
 
-      // Validate webhook payload
+      // Validate webhook payload structure
       const validation = webhookSchema.safeParse(event);
       if (!validation.success) {
         logger.error("Invalid webhook payload", {
@@ -294,9 +349,10 @@ class PaymentController {
         return;
       }
 
-      // Process the webhook
+      // Process the webhook with deduplication
       const result = await paymentService.handleWebhook(
-        event as DODOWebhookEvent
+        event as DODOWebhookEvent,
+        webhookId
       );
 
       if (!result.success) {

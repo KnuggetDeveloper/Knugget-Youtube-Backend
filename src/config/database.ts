@@ -7,12 +7,24 @@ declare global {
 }
 
 const createPrismaClient = () => {
+  // Add pgbouncer=true to connection string if using Supabase
+  const databaseUrl = config.database.url;
+  const optimizedUrl =
+    databaseUrl.includes("supabase") && !databaseUrl.includes("pgbouncer=true")
+      ? `${databaseUrl}${databaseUrl.includes("?") ? "&" : "?"}pgbouncer=true`
+      : databaseUrl;
+
   return new PrismaClient({
     log:
       config.server.nodeEnv === "development"
-        ? ["query", "error", "warn"]
+        ? ["error", "warn"] // Reduce logging to prevent spam
         : ["error"],
     errorFormat: "pretty",
+    datasources: {
+      db: {
+        url: optimizedUrl,
+      },
+    },
   });
 };
 

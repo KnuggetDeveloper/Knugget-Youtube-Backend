@@ -20,6 +20,8 @@ import {
 const supabase = createClient(config.supabase.url, config.supabase.serviceKey);
 
 export class AuthService {
+  private refreshInProgress = new Map<string, Promise<any>>(); // Single-flight per user
+
   // Generate JWT access token
   private generateAccessToken(payload: JwtPayload): string {
     return jwt.sign(payload, config.jwt.secret, {
@@ -286,8 +288,43 @@ export class AuthService {
     }
   }
 
-  // Refresh access token
+  // Refresh access token with single-flight protection
   async refreshToken(
+    refreshToken: string
+  ): Promise<ServiceResponse<LoginResponse>> {
+    try {
+      // Single-flight: prevent multiple refresh calls for same token
+      const tokenKey = `refresh_${refreshToken.slice(-10)}`;
+
+      if (this.refreshInProgress.has(tokenKey)) {
+        logger.info("Refresh already in progress, waiting...", { tokenKey });
+        return await this.refreshInProgress.get(tokenKey)!;
+      }
+
+      // Create single-flight promise
+      const refreshPromise = this.performTokenRefresh(refreshToken);
+      this.refreshInProgress.set(tokenKey, refreshPromise);
+
+      // Auto-cleanup after 30 seconds
+      setTimeout(() => {
+        this.refreshInProgress.delete(tokenKey);
+      }, 30000);
+
+      const result = await refreshPromise;
+      this.refreshInProgress.delete(tokenKey);
+      return result;
+    } catch (error) {
+      logger.error("Token refresh failed", { error });
+      return {
+        success: false,
+        error: "Token refresh failed",
+        statusCode: 401,
+      };
+    }
+  }
+
+  // Actual token refresh logic
+  private async performTokenRefresh(
     refreshToken: string
   ): Promise<ServiceResponse<LoginResponse>> {
     try {
