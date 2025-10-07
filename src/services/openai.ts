@@ -102,39 +102,56 @@ export class OpenAIService {
         );
       }
 
-      const prompt = this.createSummaryPrompt(transcriptText, videoMetadata);
+      const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+      const OPENAI_API_KEY = config.openai.apiKey;
 
-      const completion = await this.client.chat.completions.create({
-        model: config.openai.model,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an AI assistant specialized in creating concise, insightful summaries of YouTube videos. You extract key points, themes, and actionable insights from video transcripts.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        max_tokens: config.openai.maxTokens,
-        temperature: 0.3,
-        response_format: { type: "json_object" },
+      const response = await fetch(OPENAI_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-5-nano",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a helpful assistant that creates concise summaries and extracts key points from transcripts.",
+            },
+            {
+              role: "user",
+              content: `Generate a very very detailed note of all the key points mentioned in this transcript. From that generate the top 3 key takeaways, top 3 memorable quotes, top 3 examples. Present the final output starting with the top 3 key takeaways, top 3 memorable quotes, top 3 examples followed by the detailed note of all the key points.
+                    Transcript: ${transcriptText}`,
+            },
+          ],
+          reasoning_effort: "minimal",
+          verbosity: "high",
+        }),
       });
 
-      const responseText = completion.choices[0]?.message?.content;
+      if (!response.ok) {
+        throw new AppError(
+          `OpenAI API error: ${response.status}`,
+          response.status
+        );
+      }
+
+      const responseData = await response.json();
+      const responseText = responseData.choices?.[0]?.message?.content;
+
       if (!responseText) {
         throw new AppError("Empty response from OpenAI", 500);
       }
 
       // Track OpenAI usage if userId is provided
-      if (userId && completion.usage) {
+      if (userId && responseData.usage) {
         try {
           await this.trackUsage(
             userId,
             "summary_generation",
-            config.openai.model,
-            completion.usage,
+            "gpt-5-nano",
+            responseData.usage,
             videoMetadata.videoId
           );
         } catch (trackingError) {
@@ -146,28 +163,15 @@ export class OpenAIService {
         }
       }
 
-      let summaryData: OpenAISummaryResponse;
-      try {
-        summaryData = JSON.parse(responseText);
-      } catch (parseError) {
-        logger.error("Failed to parse OpenAI response", {
-          responseText,
-          parseError,
-        });
-        throw new AppError("Invalid response format from AI", 500);
-      }
-
-      // Validate response structure
-      if (!this.validateSummaryResponse(summaryData)) {
-        throw new AppError("Invalid summary response structure", 500);
-      }
+      // Parse the response text to extract structured data
+      const summaryData = this.parseNewFormatResponse(responseText);
 
       // Add usage information to response
-      if (completion.usage) {
+      if (responseData.usage) {
         summaryData.usage = {
-          promptTokens: completion.usage.prompt_tokens,
-          completionTokens: completion.usage.completion_tokens,
-          totalTokens: completion.usage.total_tokens,
+          promptTokens: responseData.usage.prompt_tokens,
+          completionTokens: responseData.usage.completion_tokens,
+          totalTokens: responseData.usage.total_tokens,
         };
       }
 
@@ -176,7 +180,7 @@ export class OpenAIService {
         keyPointsCount: summaryData.keyPoints.length,
         tagsCount: summaryData.tags.length,
         transcriptLength: transcriptText.length,
-        usage: completion.usage,
+        usage: responseData.usage,
       });
 
       return { success: true, data: summaryData };
@@ -189,21 +193,6 @@ export class OpenAIService {
 
       if (error instanceof AppError) {
         throw error;
-      }
-
-      // Handle OpenAI specific errors
-      if (
-        error instanceof OpenAI.APIError &&
-        error.code === "insufficient_quota"
-      ) {
-        throw new AppError("AI service quota exceeded", 503);
-      }
-
-      if (
-        error instanceof OpenAI.APIError &&
-        error.code === "rate_limit_exceeded"
-      ) {
-        throw new AppError("AI service rate limit exceeded", 429);
       }
 
       throw new AppError("Summary generation failed", 500);
@@ -419,43 +408,8 @@ export class OpenAIService {
     transcriptText: string,
     videoMetadata: VideoMetadata
   ): string {
-    return `
-Please analyze this YouTube video transcript and create a comprehensive summary.
-
-Video Title: "${videoMetadata.title}"
-Channel: ${videoMetadata.channelName}
-Duration: ${videoMetadata.duration || "Unknown"}
-
-Transcript:
-${transcriptText}
-
-Please provide a JSON response with the following structure:
-{
-  "keyPoints": [
-    "First key insight or main point (be specific and actionable)",
-    "Second key insight or main point",
-    "Third key insight or main point",
-    "Fourth key insight or main point (if applicable)",
-    "Fifth key insight or main point (if applicable)"
-  ],
-  "fullSummary": "A comprehensive 2-3 paragraph summary that captures the essence, main arguments, and conclusions of the video. Focus on what viewers would find most valuable and actionable.",
-  "tags": [
-    "relevant-topic-1",
-    "relevant-topic-2",
-    "relevant-topic-3",
-    "relevant-topic-4",
-    "relevant-topic-5"
-  ]
-}
-
-Guidelines:
-- Extract 3-5 key points that represent the most important insights
-- Key points should be specific, actionable, and valuable to the viewer
-- Full summary should be comprehensive but concise (200-400 words)
-- Tags should be relevant keywords that categorize the content
-- Focus on practical value and main takeaways
-- Maintain the original meaning while making it more accessible
-`.trim();
+    return `Generate a very very detailed note of all the key points mentioned in this transcript. From that generate the top 3 key takeaways, top 3 memorable quotes, top 3 examples. Present the final output starting with the top 3 key takeaways, top 3 memorable quotes, top 3 examples followed by the detailed note of all the key points.
+                    Transcript: ${transcriptText}`;
   }
 
   // Create chunk summary prompt
@@ -464,19 +418,8 @@ Guidelines:
     chunkNumber: number,
     totalChunks: number
   ): string {
-    return `
-This is chunk ${chunkNumber} of ${totalChunks} from a YouTube video transcript.
-
-Transcript Chunk:
-${chunkText}
-
-Please provide a concise summary of the key points and important information in this chunk. Focus on:
-- Main ideas and concepts discussed
-- Important details or insights
-- Any conclusions or recommendations
-
-Keep the summary to 2-3 sentences maximum.
-`.trim();
+    return `Generate a very very detailed note of all the key points mentioned in this transcript. From that generate the top 3 key takeaways, top 3 memorable quotes, top 3 examples. Present the final output starting with the top 3 key takeaways, top 3 memorable quotes, top 3 examples followed by the detailed note of all the key points.
+                    Transcript: ${chunkText}`;
   }
 
   // Create final summary prompt for chunked content
@@ -484,40 +427,92 @@ Keep the summary to 2-3 sentences maximum.
     combinedSummary: string,
     videoMetadata: VideoMetadata
   ): string {
-    return `
-Please create a comprehensive summary from these chunk summaries of a YouTube video.
+    return `Generate a very very detailed note of all the key points mentioned in this transcript. From that generate the top 3 key takeaways, top 3 memorable quotes, top 3 examples. Present the final output starting with the top 3 key takeaways, top 3 memorable quotes, top 3 examples followed by the detailed note of all the key points.
+                    Transcript: ${combinedSummary}`;
+  }
 
-Video Title: "${videoMetadata.title}"
-Channel: ${videoMetadata.channelName}
+  // Parse the new format response from gpt-5-nano
+  private parseNewFormatResponse(responseText: string): OpenAISummaryResponse {
+    // Extract key takeaways, quotes, examples, and detailed notes from the response
+    const lines = responseText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
 
-Chunk Summaries:
-${combinedSummary}
+    const keyPoints: string[] = [];
+    const quotes: string[] = [];
+    const examples: string[] = [];
+    let detailedNotes = "";
 
-Please provide a JSON response with the following structure:
-{
-  "keyPoints": [
-    "First key insight or main point",
-    "Second key insight or main point",
-    "Third key insight or main point",
-    "Fourth key insight or main point (if applicable)",
-    "Fifth key insight or main point (if applicable)"
-  ],
-  "fullSummary": "A comprehensive summary that synthesizes all the chunk summaries into a coherent overview of the entire video",
-  "tags": [
-    "relevant-topic-1",
-    "relevant-topic-2",
-    "relevant-topic-3",
-    "relevant-topic-4",
-    "relevant-topic-5"
-  ]
-}
+    let currentSection = "";
+    let inDetailedNotes = false;
 
-Guidelines:
-- Synthesize the chunk summaries into 3-5 key points
-- Create a comprehensive full summary that covers the entire video
-- Include relevant tags for categorization
-- Focus on the most valuable insights and takeaways
-`.trim();
+    for (const line of lines) {
+      if (
+        line.toLowerCase().includes("key takeaways") ||
+        line.toLowerCase().includes("takeaway")
+      ) {
+        currentSection = "takeaways";
+        continue;
+      } else if (
+        line.toLowerCase().includes("memorable quotes") ||
+        line.toLowerCase().includes("quote")
+      ) {
+        currentSection = "quotes";
+        continue;
+      } else if (
+        line.toLowerCase().includes("examples") ||
+        line.toLowerCase().includes("example")
+      ) {
+        currentSection = "examples";
+        continue;
+      } else if (
+        line.toLowerCase().includes("detailed note") ||
+        line.toLowerCase().includes("detailed notes")
+      ) {
+        currentSection = "detailed";
+        inDetailedNotes = true;
+        continue;
+      }
+
+      if (inDetailedNotes) {
+        detailedNotes += line + "\n";
+      } else if (currentSection === "takeaways" && line.match(/^\d+\./)) {
+        keyPoints.push(line.replace(/^\d+\.\s*/, ""));
+      } else if (currentSection === "quotes" && line.match(/^\d+\./)) {
+        quotes.push(line.replace(/^\d+\.\s*/, ""));
+      } else if (currentSection === "examples" && line.match(/^\d+\./)) {
+        examples.push(line.replace(/^\d+\.\s*/, ""));
+      }
+    }
+
+    // Generate tags from the content
+    const allText = responseText.toLowerCase();
+    const commonTags = [
+      "education",
+      "tutorial",
+      "tips",
+      "guide",
+      "learning",
+      "insights",
+      "analysis",
+    ];
+    const tags = commonTags.filter((tag) => allText.includes(tag));
+
+    // If no tags found, create some generic ones
+    if (tags.length === 0) {
+      tags.push("video-summary", "key-insights", "learning");
+    }
+
+    return {
+      keyPoints:
+        keyPoints.length > 0
+          ? keyPoints
+          : ["Key insights extracted from the video"],
+      fullSummary:
+        detailedNotes.trim() || "Detailed summary of the video content",
+      tags: tags.slice(0, 5), // Limit to 5 tags
+    };
   }
 
   // Validate AI response structure
