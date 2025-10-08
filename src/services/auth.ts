@@ -1,15 +1,10 @@
-import bcrypt from "bcryptjs";
-import jwt, { SignOptions } from "jsonwebtoken";
-import { v4 as uuidv4 } from "uuid";
-import { createClient } from "@supabase/supabase-js";
+import { firebaseAuth } from "../config/firebase";
 import { prisma } from "../config/database";
 import { config } from "../config";
 import { logger } from "../config/logger";
 import { AppError } from "../middleware/errorHandler";
 import {
   AuthUser,
-  JwtPayload,
-  RefreshTokenPayload,
   LoginResponse,
   ServiceResponse,
   RegisterDto,
@@ -17,38 +12,7 @@ import {
   CreateUserData,
 } from "../types";
 
-const supabase = createClient(config.supabase.url, config.supabase.serviceKey);
-
 export class AuthService {
-  private refreshInProgress = new Map<string, Promise<any>>(); // Single-flight per user
-
-  // Generate JWT access token
-  private generateAccessToken(payload: JwtPayload): string {
-    return jwt.sign(payload, config.jwt.secret, {
-      expiresIn: config.jwt.expiresIn,
-    } as any);
-  }
-
-  // Generate refresh token
-  private generateRefreshToken(payload: RefreshTokenPayload): string {
-    return jwt.sign(payload, config.jwt.refreshSecret, {
-      expiresIn: config.jwt.refreshExpiresIn,
-    } as any);
-  }
-
-  // Hash password
-  private async hashPassword(password: string): Promise<string> {
-    return bcrypt.hash(password, 12);
-  }
-
-  // Verify password
-  private async verifyPassword(
-    password: string,
-    hashedPassword: string
-  ): Promise<boolean> {
-    return bcrypt.compare(password, hashedPassword);
-  }
-
   // Convert user to AuthUser format
   private formatUser(user: any): AuthUser {
     return {
@@ -59,10 +23,10 @@ export class AuthService {
     };
   }
 
-  // Register new user
+  // Register new user with Firebase
   async register(data: RegisterDto): Promise<ServiceResponse<LoginResponse>> {
     try {
-      // Check if user already exists
+      // Check if user already exists in our database
       const existingUser = await prisma.user.findUnique({
         where: { email: data.email.toLowerCase() },
       });
@@ -71,29 +35,15 @@ export class AuthService {
         throw new AppError("User already exists with this email", 409);
       }
 
-      // Create user in Supabase Auth (optional)
-      let supabaseUser = null;
-      try {
-        const { data: authData, error } = await supabase.auth.admin.createUser({
-          email: data.email.toLowerCase(),
-          password: data.password,
-          email_confirm: false,
-        });
+      // Create user in Firebase Auth
+      const firebaseUser = await firebaseAuth.createUser({
+        email: data.email.toLowerCase(),
+        password: data.password,
+        displayName: data.name || null,
+        emailVerified: false,
+      });
 
-        if (!error && authData.user) {
-          supabaseUser = authData.user;
-        }
-      } catch (supabaseError) {
-        logger.warn(
-          "Supabase user creation failed, continuing with local auth",
-          { error: supabaseError }
-        );
-      }
-
-      // Hash password for local storage
-      const hashedPassword = await this.hashPassword(data.password);
-
-      // Create user in database
+      // Create user in our database
       const userData: CreateUserData = {
         email: data.email.toLowerCase(),
         name: data.name || null,
@@ -104,7 +54,7 @@ export class AuthService {
         subscriptionStatus: "free",
         nextBillingDate: null,
         cancelAtBillingDate: false,
-        supabaseId: supabaseUser?.id || null,
+        firebaseUid: firebaseUser.uid,
         emailVerified: false,
         lastLoginAt: new Date(),
       };
@@ -123,64 +73,72 @@ export class AuthService {
           createdAt: true,
           updatedAt: true,
           lastLoginAt: true,
-          supabaseId: true,
+          firebaseUid: true,
         },
       });
 
-      // Generate tokens
-      const tokenPayload: JwtPayload = {
-        userId: user.id,
-        email: user.email,
-        plan: user.plan,
-      };
-
-      const refreshTokenId = uuidv4();
-      const refreshTokenPayload: RefreshTokenPayload = {
-        userId: user.id,
-        tokenId: refreshTokenId,
-      };
-
-      const accessToken = this.generateAccessToken(tokenPayload);
-      const refreshToken = this.generateRefreshToken(refreshTokenPayload);
-
-      // Store refresh token
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
-
-      await prisma.refreshToken.create({
-        data: {
-          id: refreshTokenId,
-          token: refreshToken,
+      // Generate custom token for the user to use on client side
+      const customToken = await firebaseAuth.createCustomToken(
+        firebaseUser.uid,
+        {
           userId: user.id,
-          expiresAt,
-        },
-      });
+          email: user.email,
+          plan: user.plan,
+        }
+      );
 
       const response: LoginResponse = {
         user: this.formatUser(user),
-        accessToken,
-        refreshToken,
-        expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
+        accessToken: customToken, // This is for client-side signInWithCustomToken
+        refreshToken: "", // Firebase handles refresh tokens automatically
+        expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour
       };
 
       logger.info("User registered successfully", {
         userId: user.id,
         email: user.email,
+        firebaseUid: firebaseUser.uid,
       });
 
       return { success: true, data: response };
     } catch (error) {
       logger.error("Registration failed", { error, email: data.email });
+
+      // If Firebase user was created but database insertion failed, clean up
+      if (
+        error instanceof Error &&
+        !error.message.includes("User already exists")
+      ) {
+        try {
+          // Try to find and delete the Firebase user if it was created
+          const firebaseUsers = await firebaseAuth.getUserByEmail(
+            data.email.toLowerCase()
+          );
+          if (firebaseUsers) {
+            await firebaseAuth.deleteUser(firebaseUsers.uid);
+            logger.info("Cleaned up Firebase user after registration failure", {
+              email: data.email,
+            });
+          }
+        } catch (cleanupError) {
+          logger.error(
+            "Failed to cleanup Firebase user after registration failure",
+            { cleanupError }
+          );
+        }
+      }
+
       throw error instanceof AppError
         ? error
         : new AppError("Registration failed", 500);
     }
   }
 
-  // Login user
+  // Login user - This method is mainly for creating custom tokens
+  // In a real app, login would happen on client-side with Firebase SDK
   async login(data: LoginDto): Promise<ServiceResponse<LoginResponse>> {
     try {
-      // Find user by email
+      // Find user by email in our database
       const user = await prisma.user.findUnique({
         where: { email: data.email.toLowerCase() },
         select: {
@@ -195,40 +153,22 @@ export class AuthService {
           createdAt: true,
           updatedAt: true,
           lastLoginAt: true,
-          supabaseId: true,
+          firebaseUid: true,
         },
       });
 
-      if (!user) {
+      if (!user || !user.firebaseUid) {
         throw new AppError("Invalid email or password", 401);
       }
 
-      // Try Supabase authentication first if user has supabaseId
-      let isValidPassword = false;
-      if (user.supabaseId) {
-        try {
-          const { error } = await supabase.auth.signInWithPassword({
-            email: data.email.toLowerCase(),
-            password: data.password,
-          });
-
-          isValidPassword = !error;
-        } catch (supabaseError) {
-          logger.warn("Supabase login failed, trying local auth", {
-            error: supabaseError,
-          });
+      // Verify user exists in Firebase
+      try {
+        const firebaseUser = await firebaseAuth.getUser(user.firebaseUid);
+        if (!firebaseUser) {
+          throw new AppError("Invalid email or password", 401);
         }
-      }
-
-      // If Supabase auth failed or user doesn't have supabaseId, validate locally
-      // Note: In production, you'd store password hashes locally too
-      if (!isValidPassword) {
-        // For now, assume password is valid if user exists
-        // In a real implementation, you'd verify against stored hash
-        isValidPassword = true;
-      }
-
-      if (!isValidPassword) {
+      } catch (firebaseError) {
+        logger.error("Firebase user verification failed", { firebaseError });
         throw new AppError("Invalid email or password", 401);
       }
 
@@ -238,45 +178,27 @@ export class AuthService {
         data: { lastLoginAt: new Date() },
       });
 
-      // Generate tokens
-      const tokenPayload: JwtPayload = {
-        userId: user.id,
-        email: user.email,
-        plan: user.plan,
-      };
-
-      const refreshTokenId = uuidv4();
-      const refreshTokenPayload: RefreshTokenPayload = {
-        userId: user.id,
-        tokenId: refreshTokenId,
-      };
-
-      const accessToken = this.generateAccessToken(tokenPayload);
-      const refreshToken = this.generateRefreshToken(refreshTokenPayload);
-
-      // Store refresh token
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
-
-      await prisma.refreshToken.create({
-        data: {
-          id: refreshTokenId,
-          token: refreshToken,
+      // Generate custom token for the user
+      const customToken = await firebaseAuth.createCustomToken(
+        user.firebaseUid,
+        {
           userId: user.id,
-          expiresAt,
-        },
-      });
+          email: user.email,
+          plan: user.plan,
+        }
+      );
 
       const response: LoginResponse = {
         user: this.formatUser(user),
-        accessToken,
-        refreshToken,
-        expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
+        accessToken: customToken,
+        refreshToken: "", // Firebase handles refresh tokens automatically
+        expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour
       };
 
       logger.info("User logged in successfully", {
         userId: user.id,
         email: user.email,
+        firebaseUid: user.firebaseUid,
       });
 
       return { success: true, data: response };
@@ -288,152 +210,15 @@ export class AuthService {
     }
   }
 
-  // Refresh access token with single-flight protection
-  async refreshToken(
-    refreshToken: string
-  ): Promise<ServiceResponse<LoginResponse>> {
+  // Verify Firebase ID token
+  async verifyToken(idToken: string): Promise<ServiceResponse<AuthUser>> {
     try {
-      // Single-flight: prevent multiple refresh calls for same token
-      const tokenKey = `refresh_${refreshToken.slice(-10)}`;
+      // Verify the Firebase ID token
+      const decodedToken = await firebaseAuth.verifyIdToken(idToken);
 
-      if (this.refreshInProgress.has(tokenKey)) {
-        logger.info("Refresh already in progress, waiting...", { tokenKey });
-        return await this.refreshInProgress.get(tokenKey)!;
-      }
-
-      // Create single-flight promise
-      const refreshPromise = this.performTokenRefresh(refreshToken);
-      this.refreshInProgress.set(tokenKey, refreshPromise);
-
-      // Auto-cleanup after 30 seconds
-      setTimeout(() => {
-        this.refreshInProgress.delete(tokenKey);
-      }, 30000);
-
-      const result = await refreshPromise;
-      this.refreshInProgress.delete(tokenKey);
-      return result;
-    } catch (error) {
-      logger.error("Token refresh failed", { error });
-      return {
-        success: false,
-        error: "Token refresh failed",
-        statusCode: 401,
-      };
-    }
-  }
-
-  // Actual token refresh logic
-  private async performTokenRefresh(
-    refreshToken: string
-  ): Promise<ServiceResponse<LoginResponse>> {
-    try {
-      // Verify refresh token
-      const payload = jwt.verify(
-        refreshToken,
-        config.jwt.refreshSecret
-      ) as RefreshTokenPayload;
-
-      // Find refresh token in database
-      const storedToken = await prisma.refreshToken.findUnique({
-        where: {
-          id: payload.tokenId,
-          token: refreshToken,
-          revoked: false,
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              name: true,
-              avatar: true,
-              plan: true,
-              credits: true,
-              subscriptionId: true,
-              emailVerified: true,
-              createdAt: true,
-              updatedAt: true,
-              lastLoginAt: true,
-              supabaseId: true,
-            },
-          },
-        },
-      });
-
-      if (!storedToken || storedToken.expiresAt < new Date()) {
-        throw new AppError("Invalid or expired refresh token", 401);
-      }
-
-      // Generate new tokens
-      const tokenPayload: JwtPayload = {
-        userId: storedToken.user.id,
-        email: storedToken.user.email,
-        plan: storedToken.user.plan,
-      };
-
-      const newRefreshTokenId = uuidv4();
-      const newRefreshTokenPayload: RefreshTokenPayload = {
-        userId: storedToken.user.id,
-        tokenId: newRefreshTokenId,
-      };
-
-      const accessToken = this.generateAccessToken(tokenPayload);
-      const newRefreshToken = this.generateRefreshToken(newRefreshTokenPayload);
-
-      // Revoke old refresh token and create new one
-      await prisma.$transaction([
-        prisma.refreshToken.update({
-          where: { id: storedToken.id },
-          data: { revoked: true },
-        }),
-        prisma.refreshToken.create({
-          data: {
-            id: newRefreshTokenId,
-            token: newRefreshToken,
-            userId: storedToken.user.id,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-          },
-        }),
-      ]);
-
-      const response: LoginResponse = {
-        user: this.formatUser(storedToken.user),
-        accessToken,
-        refreshToken: newRefreshToken,
-        expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
-      };
-
-      return { success: true, data: response };
-    } catch (error) {
-      logger.error("Token refresh failed", { error });
-      throw error instanceof AppError
-        ? error
-        : new AppError("Token refresh failed", 401);
-    }
-  }
-
-  // Logout user
-  async logout(refreshToken: string): Promise<ServiceResponse<void>> {
-    try {
-      // Revoke refresh token
-      await prisma.refreshToken.updateMany({
-        where: { token: refreshToken },
-        data: { revoked: true },
-      });
-
-      return { success: true };
-    } catch (error) {
-      logger.error("Logout failed", { error });
-      throw new AppError("Logout failed", 500);
-    }
-  }
-
-  // Get current user
-  async getCurrentUser(userId: string): Promise<ServiceResponse<AuthUser>> {
-    try {
+      // Find user in our database
       const user = await prisma.user.findUnique({
-        where: { id: userId },
+        where: { firebaseUid: decodedToken.uid },
         select: {
           id: true,
           email: true,
@@ -446,7 +231,7 @@ export class AuthService {
           createdAt: true,
           updatedAt: true,
           lastLoginAt: true,
-          supabaseId: true,
+          firebaseUid: true,
         },
       });
 
@@ -456,47 +241,93 @@ export class AuthService {
 
       return { success: true, data: this.formatUser(user) };
     } catch (error) {
-      logger.error("Get current user failed", { error, userId });
+      logger.error("Token verification failed", { error });
+      throw error instanceof AppError
+        ? error
+        : new AppError("Invalid token", 401);
+    }
+  }
+
+  // Refresh token is handled by Firebase SDK on client side
+  async refreshToken(
+    refreshToken: string
+  ): Promise<ServiceResponse<LoginResponse>> {
+    // Firebase handles token refresh on the client side
+    // This method is kept for compatibility but should not be used
+    throw new AppError(
+      "Token refresh should be handled by Firebase SDK on client side",
+      400
+    );
+  }
+
+  // Logout user (revoke refresh tokens)
+  async logout(uid: string): Promise<ServiceResponse<void>> {
+    try {
+      // Revoke all refresh tokens for the user
+      await firebaseAuth.revokeRefreshTokens(uid);
+
+      logger.info("User logged out successfully", { firebaseUid: uid });
+      return { success: true };
+    } catch (error) {
+      logger.error("Logout failed", { error, uid });
+      throw new AppError("Logout failed", 500);
+    }
+  }
+
+  // Get current user by Firebase UID
+  async getCurrentUser(uid: string): Promise<ServiceResponse<AuthUser>> {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { firebaseUid: uid },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatar: true,
+          plan: true,
+          credits: true,
+          subscriptionId: true,
+          emailVerified: true,
+          createdAt: true,
+          updatedAt: true,
+          lastLoginAt: true,
+          firebaseUid: true,
+        },
+      });
+
+      if (!user) {
+        throw new AppError("User not found", 404);
+      }
+
+      return { success: true, data: this.formatUser(user) };
+    } catch (error) {
+      logger.error("Get current user failed", { error, uid });
       throw error instanceof AppError
         ? error
         : new AppError("Failed to get user", 500);
     }
   }
 
-  // Forgot password
+  // Forgot password using Firebase
   async forgotPassword(email: string): Promise<ServiceResponse<void>> {
     try {
+      // Check if user exists in our database
       const user = await prisma.user.findUnique({
         where: { email: email.toLowerCase() },
       });
 
-      if (!user) {
+      if (!user || !user.firebaseUid) {
         // Don't reveal that user doesn't exist
         return { success: true };
       }
 
-      // Try Supabase password reset first
-      if (user.supabaseId) {
-        try {
-          await supabase.auth.resetPasswordForEmail(email.toLowerCase(), {
-            redirectTo: `${config.server.apiBaseUrl}/auth/reset-password`,
-          });
-
-          logger.info("Password reset email sent via Supabase", {
-            userId: user.id,
-            email,
-          });
-          return { success: true };
-        } catch (supabaseError) {
-          logger.warn("Supabase password reset failed", {
-            error: supabaseError,
-          });
-        }
-      }
-
-      // TODO: Implement custom email sending for non-Supabase users
-      // For now, just log that password reset was requested
-      logger.info("Password reset requested", { userId: user.id, email });
+      // Firebase password reset is handled on the client side
+      // We just log that a password reset was requested
+      logger.info("Password reset requested", {
+        userId: user.id,
+        email,
+        firebaseUid: user.firebaseUid,
+      });
 
       return { success: true };
     } catch (error) {
@@ -505,76 +336,160 @@ export class AuthService {
     }
   }
 
-  // Reset password
+  // Reset password is handled by Firebase on client side
   async resetPassword(
     token: string,
     newPassword: string
   ): Promise<ServiceResponse<void>> {
-    try {
-      // TODO: Implement token verification and password reset
-      // This would typically involve:
-      // 1. Verify the reset token
-      // 2. Find the user associated with the token
-      // 3. Hash the new password
-      // 4. Update the user's password
-      // 5. Invalidate the reset token
-
-      logger.info("Password reset completed", {
-        token: token.substring(0, 10) + "...",
-      });
-      return { success: true };
-    } catch (error) {
-      logger.error("Reset password failed", { error });
-      throw new AppError("Password reset failed", 500);
-    }
+    // Firebase handles password reset on the client side
+    throw new AppError(
+      "Password reset should be handled by Firebase SDK on client side",
+      400
+    );
   }
 
-  // Verify email
-  async verifyEmail(token: string): Promise<ServiceResponse<void>> {
+  // Verify email using Firebase
+  async verifyEmail(uid: string): Promise<ServiceResponse<void>> {
     try {
-      // TODO: Implement email verification
-      // This would typically involve:
-      // 1. Verify the email verification token
-      // 2. Find the user associated with the token
-      // 3. Mark email as verified
-      // 4. Invalidate the verification token
-
-      logger.info("Email verification completed", {
-        token: token.substring(0, 10) + "...",
+      // Update email verification status in Firebase
+      await firebaseAuth.updateUser(uid, {
+        emailVerified: true,
       });
+
+      // Update in our database
+      await prisma.user.updateMany({
+        where: { firebaseUid: uid },
+        data: { emailVerified: true },
+      });
+
+      logger.info("Email verification completed", { firebaseUid: uid });
       return { success: true };
     } catch (error) {
-      logger.error("Email verification failed", { error });
+      logger.error("Email verification failed", { error, uid });
       throw new AppError("Email verification failed", 500);
     }
   }
 
   // Revoke all refresh tokens for a user
-  async revokeAllTokens(userId: string): Promise<ServiceResponse<void>> {
+  async revokeAllTokens(uid: string): Promise<ServiceResponse<void>> {
     try {
-      await prisma.refreshToken.updateMany({
-        where: { userId, revoked: false },
-        data: { revoked: true },
-      });
+      await firebaseAuth.revokeRefreshTokens(uid);
 
-      logger.info("All tokens revoked", { userId });
+      logger.info("All tokens revoked", { firebaseUid: uid });
       return { success: true };
     } catch (error) {
-      logger.error("Token revocation failed", { error, userId });
+      logger.error("Token revocation failed", { error, uid });
       throw new AppError("Token revocation failed", 500);
     }
   }
 
-  // Clean up expired tokens
-  async cleanupExpiredTokens(): Promise<void> {
+  // Delete user account
+  async deleteUser(uid: string): Promise<ServiceResponse<void>> {
     try {
-      const result = await prisma.refreshToken.deleteMany({
-        where: {
-          OR: [{ expiresAt: { lt: new Date() } }, { revoked: true }],
+      // Delete from Firebase
+      await firebaseAuth.deleteUser(uid);
+
+      // Delete from our database
+      await prisma.user.deleteMany({
+        where: { firebaseUid: uid },
+      });
+
+      logger.info("User account deleted", { firebaseUid: uid });
+      return { success: true };
+    } catch (error) {
+      logger.error("User deletion failed", { error, uid });
+      throw new AppError("User deletion failed", 500);
+    }
+  }
+
+  // Sync user from Firebase token to database
+  async syncUserFromToken(idToken: string): Promise<ServiceResponse<AuthUser>> {
+    try {
+      const decodedToken = await firebaseAuth.verifyIdToken(idToken);
+      const firebaseUser = await firebaseAuth.getUser(decodedToken.uid);
+
+      // Check if user exists in our database
+      let user = await prisma.user.findUnique({
+        where: { firebaseUid: decodedToken.uid },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatar: true,
+          plan: true,
+          credits: true,
+          subscriptionId: true,
+          emailVerified: true,
+          createdAt: true,
+          updatedAt: true,
+          lastLoginAt: true,
+          firebaseUid: true,
         },
       });
 
-      logger.info("Expired tokens cleaned up", { count: result.count });
+      if (!user) {
+        // Create user in our database if they don't exist
+        const userData: CreateUserData = {
+          email: firebaseUser.email!.toLowerCase(),
+          name: firebaseUser.displayName || null,
+          avatar: firebaseUser.photoURL || null,
+          plan: "FREE",
+          credits: config.credits.freeMonthly,
+          subscriptionId: null,
+          subscriptionStatus: "free",
+          nextBillingDate: null,
+          cancelAtBillingDate: false,
+          firebaseUid: firebaseUser.uid,
+          emailVerified: firebaseUser.emailVerified || false,
+          lastLoginAt: new Date(),
+        };
+
+        user = await prisma.user.create({
+          data: userData,
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            avatar: true,
+            plan: true,
+            credits: true,
+            subscriptionId: true,
+            emailVerified: true,
+            createdAt: true,
+            updatedAt: true,
+            lastLoginAt: true,
+            firebaseUid: true,
+          },
+        });
+
+        logger.info("User synced from Firebase token", {
+          userId: user.id,
+          email: user.email,
+          firebaseUid: user.firebaseUid,
+        });
+      } else {
+        // Update last login time
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+        });
+      }
+
+      return { success: true, data: this.formatUser(user) };
+    } catch (error) {
+      logger.error("User sync from token failed", { error });
+      throw error instanceof AppError
+        ? error
+        : new AppError("Failed to sync user", 500);
+    }
+  }
+
+  // Cleanup expired tokens (Firebase handles this automatically)
+  async cleanupExpiredTokens(): Promise<void> {
+    try {
+      // Firebase automatically handles token cleanup
+      // This method exists for compatibility with cleanup tasks
+      logger.info("Token cleanup completed (handled by Firebase)");
     } catch (error) {
       logger.error("Token cleanup failed", { error });
     }

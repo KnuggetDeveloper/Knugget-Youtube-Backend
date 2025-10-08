@@ -29,21 +29,6 @@ export interface AuthUser
   lastLoginAt?: string | null;
 }
 
-export interface JwtPayload {
-  userId: string;
-  email: string;
-  plan: UserPlan;
-  iat?: number;
-  exp?: number;
-}
-
-export interface RefreshTokenPayload {
-  userId: string;
-  tokenId: string;
-  iat?: number;
-  exp?: number;
-}
-
 export interface LoginResponse {
   user: AuthUser;
   accessToken: string;
@@ -166,10 +151,6 @@ export interface LoginDto {
   password: string;
 }
 
-export interface RefreshTokenDto {
-  refreshToken: string;
-}
-
 export interface ForgotPasswordDto {
   email: string;
 }
@@ -213,7 +194,9 @@ export interface ApiError extends Error {
 }
 
 // Utility Types
-export type CreateUserData = Omit<User, "id" | "createdAt" | "updatedAt">;
+export type CreateUserData = Omit<User, "id" | "createdAt" | "updatedAt"> & {
+  firebaseUid: string;
+};
 export type UpdateUserData = Partial<
   Pick<
     User,

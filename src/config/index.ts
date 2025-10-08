@@ -17,16 +17,10 @@ const configSchema = z.object({
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1),
 
-  // Supabase
-  SUPABASE_URL: z.string().url(),
-  SUPABASE_ANON_KEY: z.string().min(1),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
-
-  // JWT
-  JWT_SECRET: z.string().min(32),
-  JWT_EXPIRES_IN: z.string().default("15m"),
-  REFRESH_TOKEN_SECRET: z.string().min(32),
-  REFRESH_TOKEN_EXPIRES_IN: z.string().default("7d"),
+  // Firebase
+  FIREBASE_PROJECT_ID: z.string().min(1),
+  FIREBASE_PRIVATE_KEY: z.string().min(1),
+  FIREBASE_CLIENT_EMAIL: z.string().email(),
 
   // OpenAI
   OPENAI_API_KEY: z.string().min(1),
@@ -96,16 +90,10 @@ export const config = {
     url: parsed.data.DATABASE_URL,
     directUrl: parsed.data.DIRECT_URL,
   },
-  supabase: {
-    url: parsed.data.SUPABASE_URL,
-    anonKey: parsed.data.SUPABASE_ANON_KEY,
-    serviceKey: parsed.data.SUPABASE_SERVICE_ROLE_KEY,
-  },
-  jwt: {
-    secret: parsed.data.JWT_SECRET,
-    expiresIn: parsed.data.JWT_EXPIRES_IN,
-    refreshSecret: parsed.data.REFRESH_TOKEN_SECRET,
-    refreshExpiresIn: parsed.data.REFRESH_TOKEN_EXPIRES_IN,
+  firebase: {
+    projectId: parsed.data.FIREBASE_PROJECT_ID,
+    privateKey: parsed.data.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+    clientEmail: parsed.data.FIREBASE_CLIENT_EMAIL,
   },
   openai: {
     apiKey: parsed.data.OPENAI_API_KEY,

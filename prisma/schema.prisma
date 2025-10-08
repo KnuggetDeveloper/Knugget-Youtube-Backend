@@ -34,8 +34,8 @@ model User {
   nextBillingDate     DateTime? // Next billing date from DodoPayments
   cancelAtBillingDate Boolean   @default(false) // Will cancel at next billing
 
-  // Supabase integration
-  supabaseId String? @unique
+  // Firebase integration
+  firebaseUid String? @unique
 
   // Timestamps
   createdAt   DateTime  @default(now())

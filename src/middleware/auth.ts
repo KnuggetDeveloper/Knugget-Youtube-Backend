@@ -1,12 +1,8 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
-import { createClient } from "@supabase/supabase-js";
-import { prisma } from "../config/database";
-import { config } from "../config";
-import { AuthenticatedRequest, JwtPayload, ApiResponse } from "../types";
+import { firebaseAuth } from "../config/firebase";
+import { authService } from "../services/auth";
+import { AuthenticatedRequest, ApiResponse } from "../types";
 import { logger } from "../config/logger";
-
-const supabase = createClient(config.supabase.url, config.supabase.serviceKey);
 
 export const authenticate = async (
   req: AuthenticatedRequest,
@@ -28,133 +24,32 @@ export const authenticate = async (
       return;
     }
 
-    let payload: JwtPayload;
-    let user;
+    // Verify Firebase ID token
+    const decodedToken = await firebaseAuth.verifyIdToken(token);
 
-    try {
-      // FIXED: Primary JWT verification (cleaner approach)
-      payload = jwt.verify(token, config.jwt.secret) as JwtPayload;
-
-      user = await prisma.user.findUnique({
-        where: { id: payload.userId },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          avatar: true,
-          plan: true,
-          credits: true,
-          subscriptionId: true,
-          subscriptionStatus: true,
-          nextBillingDate: true,
-          cancelAtBillingDate: true,
-          emailVerified: true,
-          createdAt: true,
-          updatedAt: true,
-          lastLoginAt: true,
-          supabaseId: true,
-        },
-      });
-
-      if (!user) {
-        throw new Error("User not found");
-      }
-    } catch (jwtError) {
-      // FIXED: Fallback to Supabase only if JWT fails
-      try {
-        const { data: supabaseUser, error: supabaseError } =
-          await supabase.auth.getUser(token);
-
-        if (supabaseError || !supabaseUser.user) {
-          throw new Error("Invalid token");
-        }
-
-        // Find user by Supabase ID
-        user = await prisma.user.findUnique({
-          where: { supabaseId: supabaseUser.user.id },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            avatar: true,
-            plan: true,
-            credits: true,
-            subscriptionId: true,
-            subscriptionStatus: true,
-            nextBillingDate: true,
-            cancelAtBillingDate: true,
-            emailVerified: true,
-            createdAt: true,
-            updatedAt: true,
-            lastLoginAt: true,
-            supabaseId: true,
-          },
-        });
-
-        // Create user if doesn't exist (first-time Supabase login)
-        if (!user && supabaseUser.user.email) {
-          user = await prisma.user.create({
-            data: {
-              email: supabaseUser.user.email,
-              name: supabaseUser.user.user_metadata?.name || null,
-              avatar: supabaseUser.user.user_metadata?.avatar_url || null,
-              plan: "FREE",
-              credits: 3,
-              subscriptionId: null,
-              subscriptionStatus: "free",
-              nextBillingDate: null,
-              cancelAtBillingDate: false,
-              supabaseId: supabaseUser.user.id,
-              emailVerified: !!supabaseUser.user.email_confirmed_at,
-              lastLoginAt: new Date(),
-            },
-            select: {
-              id: true,
-              email: true,
-              name: true,
-              avatar: true,
-              plan: true,
-              credits: true,
-              subscriptionId: true,
-              subscriptionStatus: true,
-              nextBillingDate: true,
-              cancelAtBillingDate: true,
-              emailVerified: true,
-              createdAt: true,
-              updatedAt: true,
-              lastLoginAt: true,
-              supabaseId: true,
-            },
-          });
-        }
-
-        if (!user) {
-          throw new Error("User not found");
-        }
-      } catch (supabaseError) {
-        logger.error("Token verification failed", {
-          error: supabaseError,
-          hasJWTError: !!jwtError,
-          userAgent: req.get("User-Agent"),
-          origin: req.get("Origin"),
-        });
-
-        const response: ApiResponse = {
-          success: false,
-          error: "Invalid or expired token",
-        };
-        res.status(401).json(response);
-        return;
-      }
+    if (!decodedToken.uid) {
+      const response: ApiResponse = {
+        success: false,
+        error: "Invalid token",
+      };
+      res.status(401).json(response);
+      return;
     }
 
-    // Format user data consistentl
-    req.user = {
-      ...user,
-      createdAt: user.createdAt.toISOString(),
-      updatedAt: user.updatedAt.toISOString(),
-      lastLoginAt: user.lastLoginAt?.toISOString() || null,
-    };
+    // Sync user from Firebase token (creates user if doesn't exist)
+    const userResult = await authService.syncUserFromToken(token);
+
+    if (!userResult.success || !userResult.data) {
+      const response: ApiResponse = {
+        success: false,
+        error: "User not found",
+      };
+      res.status(401).json(response);
+      return;
+    }
+
+    // Attach user to request
+    req.user = userResult.data;
 
     next();
   } catch (error) {
@@ -173,58 +68,80 @@ export const authenticate = async (
   }
 };
 
-export const requirePlan = (requiredPlan: "FREE" | "PREMIUM") => {
-  return (
+export const requirePlan =
+  (requiredPlan: "FREE" | "PREMIUM") =>
+  async (
     req: AuthenticatedRequest,
     res: Response,
     next: NextFunction
-  ): void => {
-    if (!req.user) {
+  ): Promise<void> => {
+    try {
+      if (!req.user) {
+        const response: ApiResponse = {
+          success: false,
+          error: "Authentication required",
+        };
+        res.status(401).json(response);
+        return;
+      }
+
+      // Check if user has required plan
+      if (requiredPlan === "PREMIUM" && req.user.plan !== "PREMIUM") {
+        const response: ApiResponse = {
+          success: false,
+          error: "Premium plan required",
+        };
+        res.status(403).json(response);
+        return;
+      }
+
+      next();
+    } catch (error) {
+      logger.error("Plan validation error", { error, userId: req.user?.id });
       const response: ApiResponse = {
         success: false,
-        error: "Authentication required",
+        error: "Plan validation failed",
       };
-      res.status(401).json(response);
+      res.status(500).json(response);
       return;
     }
-
-    if (requiredPlan === "PREMIUM" && req.user.plan !== "PREMIUM") {
-      const response: ApiResponse = {
-        success: false,
-        error: "Premium plan required",
-      };
-      res.status(403).json(response);
-      return;
-    }
-
-    next();
   };
-};
 
-export const requireCredits = (requiredCredits: number = 1) => {
-  return (
+export const requireCredits =
+  (requiredCredits: number = 1) =>
+  async (
     req: AuthenticatedRequest,
     res: Response,
     next: NextFunction
-  ): void => {
-    if (!req.user) {
+  ): Promise<void> => {
+    try {
+      if (!req.user) {
+        const response: ApiResponse = {
+          success: false,
+          error: "Authentication required",
+        };
+        res.status(401).json(response);
+        return;
+      }
+
+      // Check if user has enough credits
+      if (req.user.credits < requiredCredits) {
+        const response: ApiResponse = {
+          success: false,
+          error: "Insufficient credits",
+        };
+        res.status(403).json(response);
+        return;
+      }
+
+      next();
+    } catch (error) {
+      logger.error("Credits validation error", { error, userId: req.user?.id });
       const response: ApiResponse = {
         success: false,
-        error: "Authentication required",
+        error: "Credits validation failed",
       };
-      res.status(401).json(response);
+      res.status(500).json(response);
       return;
     }
-
-    if (req.user.credits < requiredCredits) {
-      const response: ApiResponse = {
-        success: false,
-        error: "Insufficient credits",
-      };
-      res.status(402).json(response);
-      return;
-    }
-
-    next();
   };
-};
