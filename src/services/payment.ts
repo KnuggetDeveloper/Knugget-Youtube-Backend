@@ -3,6 +3,7 @@ import { config } from "../config";
 import { logger } from "../config/logger";
 import { prisma } from "../config/database";
 import { ServiceResponse, AuthUser, DODOWebhookEvent } from "../types";
+import { tokenService } from "./token";
 
 interface PaymentConfig {
   subscriptionProductId: string;
@@ -110,6 +111,25 @@ class PaymentService {
           updatedAt: new Date(),
         },
       });
+
+      // Initialize premium tokens if user is now premium
+      if (dbPlan === UserPlan.PREMIUM && isPremium) {
+        try {
+          const billingEndDate = subscription.next_billing_date
+            ? new Date(subscription.next_billing_date)
+            : undefined;
+          await tokenService.initializePremiumTokens(
+            updatedUser.id,
+            billingEndDate
+          );
+        } catch (tokenError) {
+          logger.error("Failed to initialize premium tokens during sync", {
+            userId: updatedUser.id,
+            email,
+            error: tokenError,
+          });
+        }
+      }
 
       // Return both DB data and full DodoPayments response
       return {

@@ -9,6 +9,7 @@ import {
   ServiceResponse,
   UpdateUserData,
 } from "../types";
+import { tokenService } from "./token";
 
 export class UserService {
   // Get user profile
@@ -27,6 +28,9 @@ export class UserService {
           emailVerified: true,
           createdAt: true,
           lastLoginAt: true,
+          inputTokensRemaining: true,
+          outputTokensRemaining: true,
+          tokenResetDate: true,
         },
       });
 
@@ -45,6 +49,9 @@ export class UserService {
         emailVerified: user.emailVerified,
         createdAt: user.createdAt.toISOString(),
         lastLoginAt: user.lastLoginAt?.toISOString() || null,
+        inputTokensRemaining: user.inputTokensRemaining,
+        outputTokensRemaining: user.outputTokensRemaining,
+        tokenResetDate: user.tokenResetDate?.toISOString() || null,
       };
 
       return { success: true, data: profile };
@@ -133,6 +140,9 @@ export class UserService {
           plan: true,
           credits: true,
           createdAt: true,
+          inputTokensRemaining: true,
+          outputTokensRemaining: true,
+          tokenResetDate: true,
           _count: {
             select: {
               summaries: true,
@@ -202,6 +212,10 @@ export class UserService {
         totalInputTokens: openaiUsageStats._sum.promptTokens ?? 0,
         totalOutputTokens: openaiUsageStats._sum.completionTokens ?? 0,
         totalTokens: openaiUsageStats._sum.totalTokens ?? 0,
+        // Premium token stats
+        inputTokensRemaining: user.inputTokensRemaining,
+        outputTokensRemaining: user.outputTokensRemaining,
+        tokenResetDate: user.tokenResetDate?.toISOString() || null,
       };
 
       return { success: true, data: stats };
@@ -389,9 +403,9 @@ export class UserService {
     }
   }
 
-  // Reset monthly credits (should be called by a cron job)
+  // Reset monthly credits and tokens (should be called by a cron job)
   async resetMonthlyCredits(): Promise<
-    ServiceResponse<{ usersUpdated: number }>
+    ServiceResponse<{ usersUpdated: number; tokensReset: number }>
   > {
     try {
       // Reset credits for all users based on their plan
@@ -408,15 +422,22 @@ export class UserService {
 
       const totalUpdated = freeUsersResult.count + premiumUsersResult.count;
 
-      logger.info("Monthly credits reset", {
+      // Reset tokens for premium users
+      const tokenResetResult = await tokenService.resetAllPremiumTokens();
+      const tokensReset = tokenResetResult.success
+        ? tokenResetResult.data?.usersUpdated || 0
+        : 0;
+
+      logger.info("Monthly credits and tokens reset", {
         freeUsers: freeUsersResult.count,
         premiumUsers: premiumUsersResult.count,
         totalUsers: totalUpdated,
+        tokensReset,
       });
 
       return {
         success: true,
-        data: { usersUpdated: totalUpdated },
+        data: { usersUpdated: totalUpdated, tokensReset },
       };
     } catch (error) {
       logger.error("Monthly credits reset failed", { error });
@@ -476,6 +497,9 @@ export class UserService {
           emailVerified: true,
           createdAt: true,
           lastLoginAt: true,
+          inputTokensRemaining: true,
+          outputTokensRemaining: true,
+          tokenResetDate: true,
         },
       });
 
@@ -494,6 +518,9 @@ export class UserService {
         emailVerified: user.emailVerified,
         createdAt: user.createdAt.toISOString(),
         lastLoginAt: user.lastLoginAt?.toISOString() || null,
+        inputTokensRemaining: user.inputTokensRemaining,
+        outputTokensRemaining: user.outputTokensRemaining,
+        tokenResetDate: user.tokenResetDate?.toISOString() || null,
       };
 
       return { success: true, data: profile };

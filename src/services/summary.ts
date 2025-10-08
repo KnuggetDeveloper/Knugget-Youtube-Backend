@@ -4,6 +4,7 @@ import { config } from "../config";
 import { logger } from "../config/logger";
 import { AppError } from "../middleware/errorHandler";
 import { openaiService } from "./openai";
+import { tokenService } from "./token";
 import {
   SummaryData,
   GenerateSummaryRequest,
@@ -23,7 +24,7 @@ export class SummaryService {
     data: GenerateSummaryRequest
   ): Promise<ServiceResponse<SummaryData>> {
     try {
-      // Check if user has enough credits
+      // Check if user has enough credits or tokens
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { credits: true, plan: true },
@@ -33,8 +34,39 @@ export class SummaryService {
         throw new AppError("User not found", 404);
       }
 
-      if (user.credits < config.credits.perSummary) {
-        throw new AppError("Insufficient credits", 402);
+      // For free users, check credits
+      if (user.plan === "FREE") {
+        if (user.credits < config.credits.perSummary) {
+          throw new AppError("Insufficient credits", 402);
+        }
+      } else if (user.plan === "PREMIUM") {
+        // For premium users, check tokens
+        const transcriptText = this.formatTranscriptText(data.transcript);
+        const estimatedUsage = tokenService.estimateTokenUsage(transcriptText);
+
+        const tokenStatus = await tokenService.checkTokenAvailability(
+          userId,
+          estimatedUsage.inputTokens,
+          estimatedUsage.outputTokens
+        );
+
+        if (!tokenStatus.success) {
+          throw new AppError("Failed to check token availability", 500);
+        }
+
+        if (tokenStatus.data?.isTokensExhausted) {
+          throw new AppError(
+            "Token limit exceeded. Your tokens will reset on your next billing date.",
+            402
+          );
+        }
+
+        if (!tokenStatus.data?.hasEnoughTokens) {
+          throw new AppError(
+            `Insufficient tokens. Required: ${estimatedUsage.inputTokens} input, ${estimatedUsage.outputTokens} output. Available: ${tokenStatus.data?.inputTokensRemaining} input, ${tokenStatus.data?.outputTokensRemaining} output.`,
+            402
+          );
+        }
       }
 
       // Check if summary already exists for this video

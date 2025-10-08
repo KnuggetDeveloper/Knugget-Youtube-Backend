@@ -10,6 +10,7 @@ import {
   ServiceResponse,
   MAX_TRANSCRIPT_LENGTH,
 } from "../types";
+import { tokenService } from "./token";
 
 interface OpenAICompletionRequest {
   messages: Array<{
@@ -93,6 +94,45 @@ export class OpenAIService {
     try {
       const transcriptText = this.formatTranscriptForAI(transcript);
 
+      // Check token availability for premium users
+      if (userId) {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { plan: true },
+        });
+
+        if (user?.plan === "PREMIUM") {
+          // Estimate token usage
+          const estimatedUsage =
+            tokenService.estimateTokenUsage(transcriptText);
+
+          // Check if user has enough tokens
+          const tokenStatus = await tokenService.checkTokenAvailability(
+            userId,
+            estimatedUsage.inputTokens,
+            estimatedUsage.outputTokens
+          );
+
+          if (!tokenStatus.success) {
+            throw new AppError("Failed to check token availability", 500);
+          }
+
+          if (tokenStatus.data?.isTokensExhausted) {
+            throw new AppError(
+              "Token limit exceeded. Your tokens will reset on your next billing date.",
+              402
+            );
+          }
+
+          if (!tokenStatus.data?.hasEnoughTokens) {
+            throw new AppError(
+              `Insufficient tokens. Required: ${estimatedUsage.inputTokens} input, ${estimatedUsage.outputTokens} output. Available: ${tokenStatus.data?.inputTokensRemaining} input, ${tokenStatus.data?.outputTokensRemaining} output.`,
+              402
+            );
+          }
+        }
+      }
+
       if (transcriptText.length > MAX_TRANSCRIPT_LENGTH) {
         // Chunk large transcripts
         return this.generateSummaryFromChunks(
@@ -154,6 +194,27 @@ export class OpenAIService {
             responseData.usage,
             videoMetadata.videoId
           );
+
+          // Consume tokens for premium users
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { plan: true },
+          });
+
+          if (user?.plan === "PREMIUM") {
+            try {
+              await tokenService.consumeTokens(userId, {
+                inputTokens: responseData.usage.prompt_tokens,
+                outputTokens: responseData.usage.completion_tokens,
+              });
+            } catch (tokenError) {
+              logger.warn("Failed to consume tokens", {
+                tokenError,
+                userId,
+                usage: responseData.usage,
+              });
+            }
+          }
         } catch (trackingError) {
           // Continue operation even if tracking fails
           logger.warn("Failed to track OpenAI usage", {
@@ -252,6 +313,27 @@ export class OpenAIService {
                 completion.usage,
                 videoMetadata.videoId
               );
+
+              // Consume tokens for premium users
+              const user = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { plan: true },
+              });
+
+              if (user?.plan === "PREMIUM") {
+                try {
+                  await tokenService.consumeTokens(userId, {
+                    inputTokens: completion.usage.prompt_tokens,
+                    outputTokens: completion.usage.completion_tokens,
+                  });
+                } catch (tokenError) {
+                  logger.warn("Failed to consume tokens for chunk", {
+                    tokenError,
+                    userId,
+                    usage: completion.usage,
+                  });
+                }
+              }
             } catch (trackingError) {
               logger.warn("Failed to track chunk usage", {
                 trackingError,
@@ -317,6 +399,27 @@ export class OpenAIService {
             finalCompletion.usage,
             videoMetadata.videoId
           );
+
+          // Consume tokens for premium users
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { plan: true },
+          });
+
+          if (user?.plan === "PREMIUM") {
+            try {
+              await tokenService.consumeTokens(userId, {
+                inputTokens: finalCompletion.usage.prompt_tokens,
+                outputTokens: finalCompletion.usage.completion_tokens,
+              });
+            } catch (tokenError) {
+              logger.warn("Failed to consume tokens for final summary", {
+                tokenError,
+                userId,
+                usage: finalCompletion.usage,
+              });
+            }
+          }
         } catch (trackingError) {
           logger.warn("Failed to track final summary usage", {
             trackingError,

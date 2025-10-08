@@ -28,6 +28,11 @@ model User {
   plan    UserPlan @default(FREE)
   credits Int      @default(3)
 
+  // Token management for premium users
+  inputTokensRemaining  Int       @default(0) // Remaining input tokens for current billing cycle
+  outputTokensRemaining Int       @default(0) // Remaining output tokens for current billing cycle
+  tokenResetDate        DateTime? // Date when tokens will be reset (billing cycle end)
+
   // Subscription management
   subscriptionId      String?   @unique // DodoPayments subscription ID
   subscriptionStatus  String?   @default("free") // Current subscription status

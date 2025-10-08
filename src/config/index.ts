@@ -62,6 +62,10 @@ const configSchema = z.object({
   FREE_PLAN_MONTHLY_CREDITS: z.string().transform(Number).default("10"),
   PREMIUM_PLAN_MONTHLY_CREDITS: z.string().transform(Number).default("1000"),
 
+  // Premium Token Limits
+  PREMIUM_INPUT_TOKENS: z.string().transform(Number).default("9000000"), // 9M input tokens
+  PREMIUM_OUTPUT_TOKENS: z.string().transform(Number).default("600000"), // 600K output tokens
+
   // Feature Flags (for future re-enablement)
   ENABLE_LINKEDIN: z
     .string()
@@ -129,6 +133,10 @@ export const config = {
     perSummary: parsed.data.CREDITS_PER_SUMMARY,
     freeMonthly: parsed.data.FREE_PLAN_MONTHLY_CREDITS,
     premiumMonthly: parsed.data.PREMIUM_PLAN_MONTHLY_CREDITS,
+  },
+  tokens: {
+    premiumInputTokens: parsed.data.PREMIUM_INPUT_TOKENS,
+    premiumOutputTokens: parsed.data.PREMIUM_OUTPUT_TOKENS,
   },
   features: {
     linkedin: parsed.data.ENABLE_LINKEDIN,
