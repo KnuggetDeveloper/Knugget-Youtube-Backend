@@ -431,27 +431,9 @@ export class AuthService {
       });
 
       if (!user) {
-        // Create user in our database if they don't exist
-        const userData: CreateUserData = {
-          email: firebaseUser.email!.toLowerCase(),
-          name: firebaseUser.displayName || null,
-          avatar: firebaseUser.photoURL || null,
-          plan: "FREE",
-          credits: config.credits.freeMonthly,
-          inputTokensRemaining: 0,
-          outputTokensRemaining: 0,
-          tokenResetDate: null,
-          subscriptionId: null,
-          subscriptionStatus: "free",
-          nextBillingDate: null,
-          cancelAtBillingDate: false,
-          firebaseUid: firebaseUser.uid,
-          emailVerified: firebaseUser.emailVerified || false,
-          lastLoginAt: new Date(),
-        };
-
-        user = await prisma.user.create({
-          data: userData,
+        // If not found by firebaseUid, check if user exists by email
+        const existingUserByEmail = await prisma.user.findUnique({
+          where: { email: firebaseUser.email!.toLowerCase() },
           select: {
             id: true,
             email: true,
@@ -468,16 +450,108 @@ export class AuthService {
           },
         });
 
-        logger.info("User synced from Firebase token", {
+        if (existingUserByEmail) {
+          // User exists by email but doesn't have firebaseUid - update with Firebase UID
+          user = await prisma.user.update({
+            where: { id: existingUserByEmail.id },
+            data: {
+              firebaseUid: firebaseUser.uid,
+              name: firebaseUser.displayName || existingUserByEmail.name,
+              avatar: firebaseUser.photoURL || existingUserByEmail.avatar,
+              emailVerified:
+                firebaseUser.emailVerified || existingUserByEmail.emailVerified,
+              lastLoginAt: new Date(),
+            },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              avatar: true,
+              plan: true,
+              credits: true,
+              subscriptionId: true,
+              emailVerified: true,
+              createdAt: true,
+              updatedAt: true,
+              lastLoginAt: true,
+              firebaseUid: true,
+            },
+          });
+
+          logger.info("User updated with Firebase UID", {
+            userId: user.id,
+            email: user.email,
+            firebaseUid: user.firebaseUid,
+          });
+        } else {
+          // Create new user if they don't exist by email or firebaseUid
+          const userData: CreateUserData = {
+            email: firebaseUser.email!.toLowerCase(),
+            name: firebaseUser.displayName || null,
+            avatar: firebaseUser.photoURL || null,
+            plan: "FREE",
+            credits: config.credits.freeMonthly,
+            inputTokensRemaining: 0,
+            outputTokensRemaining: 0,
+            tokenResetDate: null,
+            subscriptionId: null,
+            subscriptionStatus: "free",
+            nextBillingDate: null,
+            cancelAtBillingDate: false,
+            firebaseUid: firebaseUser.uid,
+            emailVerified: firebaseUser.emailVerified || false,
+            lastLoginAt: new Date(),
+          };
+
+          user = await prisma.user.create({
+            data: userData,
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              avatar: true,
+              plan: true,
+              credits: true,
+              subscriptionId: true,
+              emailVerified: true,
+              createdAt: true,
+              updatedAt: true,
+              lastLoginAt: true,
+              firebaseUid: true,
+            },
+          });
+
+          logger.info("New user created from Firebase token", {
+            userId: user.id,
+            email: user.email,
+            firebaseUid: user.firebaseUid,
+          });
+        }
+      } else {
+        // Update last login time for existing user found by firebaseUid
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            avatar: true,
+            plan: true,
+            credits: true,
+            subscriptionId: true,
+            emailVerified: true,
+            createdAt: true,
+            updatedAt: true,
+            lastLoginAt: true,
+            firebaseUid: true,
+          },
+        });
+
+        logger.info("Existing user login updated", {
           userId: user.id,
           email: user.email,
           firebaseUid: user.firebaseUid,
-        });
-      } else {
-        // Update last login time
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date() },
         });
       }
 
