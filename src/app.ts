@@ -35,6 +35,9 @@ app.use(
       if (!origin) return callback(null, true);
 
       const allowedOrigins = [
+        // Production domains
+        "https://www.getknugget.com",
+        "https://getknugget.com",
         "https://knugget-youtube-client.vercel.app",
         "https://knugget-new-client.vercel.app",
         "chrome-extension://",
