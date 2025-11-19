@@ -24,49 +24,70 @@ export class SummaryService {
     data: GenerateSummaryRequest
   ): Promise<ServiceResponse<SummaryData>> {
     try {
-      // Check if user has enough credits or tokens
+      // Check if user has enough videos and tokens for their plan
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { credits: true, plan: true },
+        select: {
+          plan: true,
+          videosProcessedThisMonth: true,
+          videoResetDate: true,
+        },
       });
 
       if (!user) {
         throw new AppError("User not found", 404);
       }
 
-      // For free users, check credits
-      if (user.plan === "FREE") {
-        if (user.credits < config.credits.perSummary) {
-          throw new AppError("Insufficient credits", 402);
-        }
-      } else if (user.plan === "PREMIUM") {
-        // For premium users, check tokens
-        const transcriptText = this.formatTranscriptText(data.transcript);
-        const estimatedUsage = tokenService.estimateTokenUsage(transcriptText);
+      // Get video limit based on plan
+      let videoLimit: number;
+      switch (user.plan) {
+        case "FREE":
+          videoLimit = config.videoLimits.free;
+          break;
+        case "LITE":
+          videoLimit = config.videoLimits.lite;
+          break;
+        case "PRO":
+          videoLimit = config.videoLimits.pro;
+          break;
+        default:
+          videoLimit = config.videoLimits.free;
+      }
 
-        const tokenStatus = await tokenService.checkTokenAvailability(
-          userId,
-          estimatedUsage.inputTokens,
-          estimatedUsage.outputTokens
+      // Check video limit
+      if (user.videosProcessedThisMonth >= videoLimit) {
+        throw new AppError(
+          `Video limit reached. You have processed ${user.videosProcessedThisMonth}/${videoLimit} videos this month. Upgrade your plan for more videos!`,
+          402
         );
+      }
 
-        if (!tokenStatus.success) {
-          throw new AppError("Failed to check token availability", 500);
-        }
+      // Check token availability (ALL users now use tokens)
+      const transcriptText = this.formatTranscriptText(data.transcript);
+      const estimatedUsage = tokenService.estimateTokenUsage(transcriptText);
 
-        if (tokenStatus.data?.isTokensExhausted) {
-          throw new AppError(
-            "Token limit exceeded. Your tokens will reset on your next billing date.",
-            402
-          );
-        }
+      const tokenStatus = await tokenService.checkTokenAvailability(
+        userId,
+        estimatedUsage.inputTokens,
+        estimatedUsage.outputTokens
+      );
 
-        if (!tokenStatus.data?.hasEnoughTokens) {
-          throw new AppError(
-            `Insufficient tokens. Required: ${estimatedUsage.inputTokens} input, ${estimatedUsage.outputTokens} output. Available: ${tokenStatus.data?.inputTokensRemaining} input, ${tokenStatus.data?.outputTokensRemaining} output.`,
-            402
-          );
-        }
+      if (!tokenStatus.success) {
+        throw new AppError("Failed to check token availability", 500);
+      }
+
+      if (tokenStatus.data?.isTokensExhausted) {
+        throw new AppError(
+          "Token limit exceeded. Your tokens will reset on your next billing date.",
+          402
+        );
+      }
+
+      if (!tokenStatus.data?.hasEnoughTokens) {
+        throw new AppError(
+          `Insufficient tokens. Required: ${estimatedUsage.inputTokens} input, ${estimatedUsage.outputTokens} output. Available: ${tokenStatus.data?.inputTokensRemaining} input, ${tokenStatus.data?.outputTokensRemaining} output.`,
+          402
+        );
       }
 
       // Check if summary already exists for this video
@@ -151,7 +172,7 @@ export class SummaryService {
   ): Promise<ServiceResponse<SummaryData>> {
     try {
       let summary;
-      let shouldDeductCredits = false;
+      let shouldIncrementVideo = false;
 
       if (summaryData.id && summaryData.id !== "") {
         // Update existing summary
@@ -176,7 +197,7 @@ export class SummaryService {
           },
         });
       } else {
-        // Create new summary - this is when we deduct credits
+        // Create new summary - this is when we increment video count
         if (
           !summaryData.videoId ||
           !summaryData.videoTitle ||
@@ -185,21 +206,43 @@ export class SummaryService {
           throw new AppError("Missing required video metadata", 400);
         }
 
-        // Check if user has enough credits
+        // Check if user has video quota remaining
         const user = await prisma.user.findUnique({
           where: { id: userId },
-          select: { credits: true, plan: true },
+          select: {
+            plan: true,
+            videosProcessedThisMonth: true,
+          },
         });
 
         if (!user) {
           throw new AppError("User not found", 404);
         }
 
-        if (user.credits < config.credits.perSummary) {
-          throw new AppError("Insufficient credits", 402);
+        // Get video limit based on plan
+        let videoLimit: number;
+        switch (user.plan) {
+          case "FREE":
+            videoLimit = config.videoLimits.free;
+            break;
+          case "LITE":
+            videoLimit = config.videoLimits.lite;
+            break;
+          case "PRO":
+            videoLimit = config.videoLimits.pro;
+            break;
+          default:
+            videoLimit = config.videoLimits.free;
         }
 
-        shouldDeductCredits = true;
+        if (user.videosProcessedThisMonth >= videoLimit) {
+          throw new AppError(
+            `Video limit reached. You have processed ${user.videosProcessedThisMonth}/${videoLimit} videos this month.`,
+            402
+          );
+        }
+
+        shouldIncrementVideo = true;
 
         // Check if summary already exists for this video
         const existingSummary = await prisma.summary.findFirst({
@@ -239,11 +282,11 @@ export class SummaryService {
           },
         });
 
-        // Deduct credits after successful save
-        if (shouldDeductCredits) {
+        // Increment video count after successful save
+        if (shouldIncrementVideo) {
           await prisma.user.update({
             where: { id: userId },
-            data: { credits: { decrement: config.credits.perSummary } },
+            data: { videosProcessedThisMonth: { increment: 1 } },
           });
         }
       }

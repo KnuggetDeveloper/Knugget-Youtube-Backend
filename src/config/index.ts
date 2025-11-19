@@ -15,7 +15,6 @@ const configSchema = z.object({
 
   // Database
   DATABASE_URL: z.string().min(1),
-  DIRECT_URL: z.string().min(1),
 
   // Firebase
   FIREBASE_PROJECT_ID: z.string().min(1),
@@ -29,10 +28,11 @@ const configSchema = z.object({
 
   // DODOpayment
   DODO_PAYMENTS_API_KEY: z.string().min(1),
-  DODO_BASE_URL: z.string().url().default("https://test.dodopayments.com"),
+  DODO_BASE_URL: z.string().url().default("https://api.dodopayments.com"),
   DODO_WEBHOOK_SECRET: z.string().min(1).optional(),
-  DODO_PAYMENTS_ENVIRONMENT: z.string().default("test_mode"),
-  PRODUCT_ID: z.string().min(1), // This should be a subscription product ID
+  DODO_PAYMENTS_ENVIRONMENT: z.string().default("live_mode"),
+  PRODUCT_ID_LITE: z.string().min(1), // Knugget Lite plan product ID
+  PRODUCT_ID_PRO: z.string().min(1), // Knugget Pro plan product ID
   FRONTEND_URL: z
     .string()
     .url()
@@ -57,14 +57,20 @@ const configSchema = z.object({
   LOG_LEVEL: z.enum(["error", "warn", "info", "debug"]).default("info"),
   LOG_FILE: z.string().default("logs/app.log"),
 
-  // Credits
-  CREDITS_PER_SUMMARY: z.string().transform(Number).default("1"),
-  FREE_PLAN_MONTHLY_CREDITS: z.string().transform(Number).default("10"),
-  PREMIUM_PLAN_MONTHLY_CREDITS: z.string().transform(Number).default("1000"),
+  // Video Limits per Plan (NO CREDITS SYSTEM)
+  FREE_PLAN_MONTHLY_VIDEOS: z.string().transform(Number).default("5"),
+  LITE_PLAN_MONTHLY_VIDEOS: z.string().transform(Number).default("100"),
+  PRO_PLAN_MONTHLY_VIDEOS: z.string().transform(Number).default("300"),
 
-  // Premium Token Limits
-  PREMIUM_INPUT_TOKENS: z.string().transform(Number).default("9000000"), // 9M input tokens
-  PREMIUM_OUTPUT_TOKENS: z.string().transform(Number).default("600000"), // 600K output tokens
+  // Token Limits per Plan
+  FREE_INPUT_TOKENS: z.string().transform(Number).default("150000"), // 150K input tokens
+  FREE_OUTPUT_TOKENS: z.string().transform(Number).default("10000"), // 10K output tokens
+
+  LITE_INPUT_TOKENS: z.string().transform(Number).default("3000000"), // 3M input tokens
+  LITE_OUTPUT_TOKENS: z.string().transform(Number).default("200000"), // 200K output tokens
+
+  PRO_INPUT_TOKENS: z.string().transform(Number).default("9000000"), // 9M input tokens
+  PRO_OUTPUT_TOKENS: z.string().transform(Number).default("600000"), // 600K output tokens
 
   // Feature Flags (for future re-enablement)
   ENABLE_LINKEDIN: z
@@ -92,7 +98,6 @@ export const config = {
   },
   database: {
     url: parsed.data.DATABASE_URL,
-    directUrl: parsed.data.DIRECT_URL,
   },
   firebase: {
     projectId: parsed.data.FIREBASE_PROJECT_ID,
@@ -109,7 +114,8 @@ export const config = {
     dodoBaseUrl: parsed.data.DODO_BASE_URL,
     webhookSecret: parsed.data.DODO_WEBHOOK_SECRET,
     environment: parsed.data.DODO_PAYMENTS_ENVIRONMENT,
-    subscriptionProductId: parsed.data.PRODUCT_ID,
+    productIdLite: parsed.data.PRODUCT_ID_LITE,
+    productIdPro: parsed.data.PRODUCT_ID_PRO,
     frontendUrl: parsed.data.FRONTEND_URL,
   },
   email: {
@@ -129,14 +135,24 @@ export const config = {
     level: parsed.data.LOG_LEVEL,
     file: parsed.data.LOG_FILE,
   },
-  credits: {
-    perSummary: parsed.data.CREDITS_PER_SUMMARY,
-    freeMonthly: parsed.data.FREE_PLAN_MONTHLY_CREDITS,
-    premiumMonthly: parsed.data.PREMIUM_PLAN_MONTHLY_CREDITS,
+  videoLimits: {
+    free: parsed.data.FREE_PLAN_MONTHLY_VIDEOS,
+    lite: parsed.data.LITE_PLAN_MONTHLY_VIDEOS,
+    pro: parsed.data.PRO_PLAN_MONTHLY_VIDEOS,
   },
   tokens: {
-    premiumInputTokens: parsed.data.PREMIUM_INPUT_TOKENS,
-    premiumOutputTokens: parsed.data.PREMIUM_OUTPUT_TOKENS,
+    free: {
+      input: parsed.data.FREE_INPUT_TOKENS,
+      output: parsed.data.FREE_OUTPUT_TOKENS,
+    },
+    lite: {
+      input: parsed.data.LITE_INPUT_TOKENS,
+      output: parsed.data.LITE_OUTPUT_TOKENS,
+    },
+    pro: {
+      input: parsed.data.PRO_INPUT_TOKENS,
+      output: parsed.data.PRO_OUTPUT_TOKENS,
+    },
   },
   features: {
     linkedin: parsed.data.ENABLE_LINKEDIN,

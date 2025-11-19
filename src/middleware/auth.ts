@@ -69,7 +69,7 @@ export const authenticate = async (
 };
 
 export const requirePlan =
-  (requiredPlan: "FREE" | "PREMIUM") =>
+  (requiredPlan: "FREE" | "LITE" | "PRO") =>
   async (
     req: AuthenticatedRequest,
     res: Response,
@@ -86,10 +86,19 @@ export const requirePlan =
       }
 
       // Check if user has required plan
-      if (requiredPlan === "PREMIUM" && req.user.plan !== "PREMIUM") {
+      const planHierarchy: Record<string, number> = {
+        FREE: 0,
+        LITE: 1,
+        PRO: 2,
+      };
+
+      const userPlanLevel = planHierarchy[req.user.plan] || 0;
+      const requiredPlanLevel = planHierarchy[requiredPlan] || 0;
+
+      if (userPlanLevel < requiredPlanLevel) {
         const response: ApiResponse = {
           success: false,
-          error: "Premium plan required",
+          error: `${requiredPlan} plan or higher required`,
         };
         res.status(403).json(response);
         return;
@@ -107,6 +116,8 @@ export const requirePlan =
     }
   };
 
+// DEPRECATED: Credits system removed - video limits checked in service layer
+// This middleware now only checks authentication
 export const requireCredits =
   (requiredCredits: number = 1) =>
   async (
@@ -124,22 +135,18 @@ export const requireCredits =
         return;
       }
 
-      // Check if user has enough credits
-      if (req.user.credits < requiredCredits) {
-        const response: ApiResponse = {
-          success: false,
-          error: "Insufficient credits",
-        };
-        res.status(403).json(response);
-        return;
-      }
+      // Credits system removed - video limits and tokens checked in service layer
+      logger.debug("requireCredits middleware called (deprecated, now only checks auth)", {
+        userId: req.user.id,
+        plan: req.user.plan,
+      });
 
       next();
     } catch (error) {
-      logger.error("Credits validation error", { error, userId: req.user?.id });
+      logger.error("Auth validation error", { error, userId: req.user?.id });
       const response: ApiResponse = {
         success: false,
-        error: "Credits validation failed",
+        error: "Auth validation failed",
       };
       res.status(500).json(response);
       return;

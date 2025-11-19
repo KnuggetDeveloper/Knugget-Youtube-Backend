@@ -16,9 +16,9 @@ const router = Router();
 router.use(authenticate as any);
 
 // Generate AI summary from transcript - NO RATE LIMITING (Extended timeout for AI processing)
+// Video limits and token checks are now done in the service layer
 router.post(
   "/generate",
-  requireCredits(config.credits.perSummary) as any,
   // Remove the validate middleware temporarily or update the schema
   catchAsync(summaryController.generateHandler, 120000) // 2 minutes timeout for AI processing
 );

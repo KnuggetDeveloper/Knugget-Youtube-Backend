@@ -94,14 +94,14 @@ export class OpenAIService {
     try {
       const transcriptText = this.formatTranscriptForAI(transcript);
 
-      // Check token availability for premium users
+      // Check token availability for all users (FREE, LITE, PRO)
       if (userId) {
         const user = await prisma.user.findUnique({
           where: { id: userId },
           select: { plan: true },
         });
 
-        if (user?.plan === "PREMIUM") {
+        if (user) {
           // Estimate token usage
           const estimatedUsage =
             tokenService.estimateTokenUsage(transcriptText);
@@ -195,13 +195,13 @@ export class OpenAIService {
             videoMetadata.videoId
           );
 
-          // Consume tokens for premium users
+          // Consume tokens for all users (FREE, LITE, PRO)
           const user = await prisma.user.findUnique({
             where: { id: userId },
             select: { plan: true },
           });
 
-          if (user?.plan === "PREMIUM") {
+          if (user) {
             try {
               await tokenService.consumeTokens(userId, {
                 inputTokens: responseData.usage.prompt_tokens,
@@ -314,13 +314,13 @@ export class OpenAIService {
                 videoMetadata.videoId
               );
 
-              // Consume tokens for premium users
+              // Consume tokens for all users (FREE, LITE, PRO)
               const user = await prisma.user.findUnique({
                 where: { id: userId },
                 select: { plan: true },
               });
 
-              if (user?.plan === "PREMIUM") {
+              if (user) {
                 try {
                   await tokenService.consumeTokens(userId, {
                     inputTokens: completion.usage.prompt_tokens,
@@ -400,13 +400,13 @@ export class OpenAIService {
             videoMetadata.videoId
           );
 
-          // Consume tokens for premium users
+          // Consume tokens for all users (FREE, LITE, PRO)
           const user = await prisma.user.findUnique({
             where: { id: userId },
             select: { plan: true },
           });
 
-          if (user?.plan === "PREMIUM") {
+          if (user) {
             try {
               await tokenService.consumeTokens(userId, {
                 inputTokens: finalCompletion.usage.prompt_tokens,

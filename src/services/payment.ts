@@ -6,7 +6,8 @@ import { ServiceResponse, AuthUser, DODOWebhookEvent } from "../types";
 import { tokenService } from "./token";
 
 interface PaymentConfig {
-  subscriptionProductId: string;
+  productIdLite: string;
+  productIdPro: string;
   frontendUrl: string;
 }
 
@@ -18,14 +19,16 @@ class PaymentService {
 
   constructor() {
     this.paymentConfig = {
-      subscriptionProductId: config.payment.subscriptionProductId,
+      productIdLite: config.payment.productIdLite,
+      productIdPro: config.payment.productIdPro,
       frontendUrl: config.payment.frontendUrl,
     };
 
     logger.info("PaymentService initialized", {
       hasApiKey: !!this.DODO_API_KEY,
       baseUrl: this.DODO_BASE_URL,
-      subscriptionProductId: this.paymentConfig.subscriptionProductId,
+      productIdLite: this.paymentConfig.productIdLite,
+      productIdPro: this.paymentConfig.productIdPro,
       frontendUrl: this.paymentConfig.frontendUrl,
     });
   }
@@ -57,45 +60,72 @@ class PaymentService {
       const cancelAtNext = subscription.cancel_at_next_billing_date;
       const nextBilling = new Date(subscription.next_billing_date);
       const now = new Date();
+      const productId = subscription.product_id; // Get product ID from subscription
 
-      // Determine user status based on DodoPayments response
-      let isPremium = false;
+      // Determine user status and plan based on DodoPayments response
+      let isPaid = false;
       let dbStatus = "free";
       let dbPlan: UserPlan = UserPlan.FREE;
 
       // Scenario 1: Active subscription
       if (dodoStatus === "active" && !cancelAtNext) {
-        isPremium = true;
+        isPaid = true;
         dbStatus = "active";
-        dbPlan = UserPlan.PREMIUM;
-        console.log("✅ Status: ACTIVE - Full premium access");
+
+        // Determine plan tier based on product ID
+        if (productId === this.paymentConfig.productIdLite) {
+          dbPlan = UserPlan.LITE;
+          console.log("✅ Status: ACTIVE - LITE plan access");
+        } else if (productId === this.paymentConfig.productIdPro) {
+          dbPlan = UserPlan.PRO;
+          console.log("✅ Status: ACTIVE - PRO plan access");
+        } else {
+          console.warn(
+            `⚠️ Unknown product ID: ${productId}, defaulting to LITE`
+          );
+          dbPlan = UserPlan.LITE;
+        }
       }
       // Scenario 2: Cancelling (grace period)
       else if (dodoStatus === "active" && cancelAtNext) {
         // Check if still in grace period
-        isPremium = nextBilling > now;
-        dbStatus = isPremium ? "cancelling" : "expired";
-        dbPlan = isPremium ? UserPlan.PREMIUM : UserPlan.FREE;
+        isPaid = nextBilling > now;
+        dbStatus = isPaid ? "cancelling" : "expired";
+
+        if (isPaid) {
+          // Still in grace period - maintain their plan
+          if (productId === this.paymentConfig.productIdLite) {
+            dbPlan = UserPlan.LITE;
+          } else if (productId === this.paymentConfig.productIdPro) {
+            dbPlan = UserPlan.PRO;
+          } else {
+            dbPlan = UserPlan.LITE;
+          }
+        } else {
+          // Grace period ended - downgrade to FREE
+          dbPlan = UserPlan.FREE;
+        }
+
         console.log(
-          `⚠️ Status: CANCELLING - Premium until ${nextBilling.toLocaleDateString()}`
+          `⚠️ Status: CANCELLING - ${dbPlan} until ${nextBilling.toLocaleDateString()}`
         );
       }
       // Scenario 3: Cancelled immediately
       else if (dodoStatus === "cancelled") {
-        isPremium = false;
+        isPaid = false;
         dbStatus = "expired";
         dbPlan = UserPlan.FREE;
-        console.log("❌ Status: CANCELLED - No premium access");
+        console.log("❌ Status: CANCELLED - Downgraded to FREE");
       }
       // Other statuses (pending, paused, etc.)
       else {
-        isPremium = false;
+        isPaid = false;
         dbStatus = dodoStatus || "free";
         dbPlan = UserPlan.FREE;
-        console.log(`📊 Status: ${dodoStatus.toUpperCase()}`);
+        console.log(`📊 Status: ${dodoStatus.toUpperCase()} - Using FREE plan`);
       }
 
-      console.log(`Final: ${email} → ${dbStatus} (premium: ${isPremium})`);
+      console.log(`Final: ${email} → ${dbStatus} (plan: ${dbPlan})`);
 
       // Update database
       const updatedUser = await prisma.user.update({
@@ -112,20 +142,22 @@ class PaymentService {
         },
       });
 
-      // Initialize premium tokens if user is now premium
-      if (dbPlan === UserPlan.PREMIUM && isPremium) {
+      // Initialize tokens for paid users (LITE or PRO)
+      if ((dbPlan === UserPlan.LITE || dbPlan === UserPlan.PRO) && isPaid) {
         try {
           const billingEndDate = subscription.next_billing_date
             ? new Date(subscription.next_billing_date)
             : undefined;
-          await tokenService.initializePremiumTokens(
+          await tokenService.initializePlanTokens(
             updatedUser.id,
+            dbPlan,
             billingEndDate
           );
         } catch (tokenError) {
-          logger.error("Failed to initialize premium tokens during sync", {
+          logger.error("Failed to initialize plan tokens during sync", {
             userId: updatedUser.id,
             email,
+            plan: dbPlan,
             error: tokenError,
           });
         }
@@ -154,6 +186,7 @@ class PaymentService {
         userId: user.id,
         email: user.email,
         name: user.name,
+        selectedPlan: metadata?.selectedPlan,
       });
 
       if (!user.id || !user.email || !user.name) {
@@ -164,16 +197,25 @@ class PaymentService {
         };
       }
 
-      const productId = this.paymentConfig.subscriptionProductId;
+      // Determine which product ID to use based on selected plan
+      const selectedPlan = metadata?.selectedPlan || "pro"; // default to pro
+      const productId =
+        selectedPlan === "lite"
+          ? this.paymentConfig.productIdLite
+          : this.paymentConfig.productIdPro;
+
       if (!productId || productId.trim() === "") {
         return {
           success: false,
-          error: "Product ID is required",
+          error: `Product ID for plan "${selectedPlan}" is not configured`,
           statusCode: 400,
         };
       }
 
-      console.log("🚀 Creating checkout with DodoPayments...");
+      console.log(
+        `🚀 Creating checkout for ${selectedPlan} plan with DodoPayments...`
+      );
+      console.log(`📦 Using product ID: ${productId}`);
 
       // Create checkout session
       const response = await fetch(`${this.DODO_BASE_URL}/checkouts`, {
@@ -361,7 +403,10 @@ class PaymentService {
         },
       });
 
-      if (!userData?.subscriptionId || userData.plan !== UserPlan.PREMIUM) {
+      if (
+        !userData?.subscriptionId ||
+        (userData.plan !== UserPlan.LITE && userData.plan !== UserPlan.PRO)
+      ) {
         return {
           success: false,
           error: "No active subscription found",

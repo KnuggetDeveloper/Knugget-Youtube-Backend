@@ -119,12 +119,13 @@ export interface UserProfile {
   name: string | null;
   avatar: string | null;
   plan: UserPlan;
-  credits: number;
   subscriptionId: string | null;
   emailVerified: boolean;
   createdAt: string;
   lastLoginAt: string | null;
-  // Token management for premium users
+  // Token management and video limits
+  videosProcessedThisMonth?: number;
+  videoResetDate?: string | null;
   inputTokensRemaining?: number;
   outputTokensRemaining?: number;
   tokenResetDate?: string | null;
@@ -133,15 +134,16 @@ export interface UserProfile {
 export interface UserStats {
   totalSummaries: number;
   summariesThisMonth: number;
-  creditsUsed: number;
-  creditsRemaining: number;
+  videosProcessed: number;
+  videoLimit: number;
+  videosRemaining: number;
   planStatus: UserPlan;
   joinedDate: string;
   // OpenAI Usage stats
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;
-  // Premium token stats
+  // Token stats per plan
   inputTokensRemaining?: number;
   outputTokensRemaining?: number;
   tokenResetDate?: string | null;
@@ -208,7 +210,7 @@ export type CreateUserData = Omit<User, "id" | "createdAt" | "updatedAt"> & {
 export type UpdateUserData = Partial<
   Pick<
     User,
-    "name" | "avatar" | "credits" | "plan" | "emailVerified" | "lastLoginAt"
+    "name" | "avatar" | "plan" | "emailVerified" | "lastLoginAt"
   >
 >;
 

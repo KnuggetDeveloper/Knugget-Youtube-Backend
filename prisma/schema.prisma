@@ -3,14 +3,15 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // directUrl = env("DIRECT_URL")
 }
 
 enum UserPlan {
   FREE
-  PREMIUM
+  LITE
+  PRO
 }
 
 enum SummaryStatus {
@@ -21,14 +22,17 @@ enum SummaryStatus {
 }
 
 model User {
-  id      String   @id @default(cuid())
-  email   String   @unique
-  name    String?
-  avatar  String?
-  plan    UserPlan @default(FREE)
-  credits Int      @default(3)
+  id     String   @id @default(cuid())
+  email  String   @unique
+  name   String?
+  avatar String?
+  plan   UserPlan @default(FREE)
 
-  // Token management for premium users
+  // Video limit tracking (NO CREDITS)
+  videosProcessedThisMonth Int       @default(0) // Videos processed in current billing cycle
+  videoResetDate           DateTime? // Date when video count will reset (billing cycle end)
+
+  // Token management per plan tier
   inputTokensRemaining  Int       @default(0) // Remaining input tokens for current billing cycle
   outputTokensRemaining Int       @default(0) // Remaining output tokens for current billing cycle
   tokenResetDate        DateTime? // Date when tokens will be reset (billing cycle end)

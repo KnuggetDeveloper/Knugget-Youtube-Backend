@@ -20,10 +20,11 @@ export interface TokenStatus {
 
 export class TokenService {
   /**
-   * Initialize premium tokens for a user when they upgrade
+   * Initialize tokens for a user based on their plan (FREE, LITE, or PRO)
    */
-  async initializePremiumTokens(
+  async initializePlanTokens(
     userId: string,
+    plan: UserPlan,
     billingCycleEndDate?: Date
   ): Promise<ServiceResponse<void>> {
     try {
@@ -36,8 +37,26 @@ export class TokenService {
         throw new AppError("User not found", 404);
       }
 
-      if (user.plan !== UserPlan.PREMIUM) {
-        throw new AppError("User is not on premium plan", 400);
+      // Get token limits based on plan
+      let inputTokens: number;
+      let outputTokens: number;
+
+      switch (plan) {
+        case UserPlan.FREE:
+          inputTokens = config.tokens.free.input;
+          outputTokens = config.tokens.free.output;
+          break;
+        case UserPlan.LITE:
+          inputTokens = config.tokens.lite.input;
+          outputTokens = config.tokens.lite.output;
+          break;
+        case UserPlan.PRO:
+          inputTokens = config.tokens.pro.input;
+          outputTokens = config.tokens.pro.output;
+          break;
+        default:
+          inputTokens = config.tokens.free.input;
+          outputTokens = config.tokens.free.output;
       }
 
       // Use provided billing cycle end date or next billing date from user
@@ -47,29 +66,44 @@ export class TokenService {
       await prisma.user.update({
         where: { id: userId },
         data: {
-          inputTokensRemaining: config.tokens.premiumInputTokens,
-          outputTokensRemaining: config.tokens.premiumOutputTokens,
+          inputTokensRemaining: inputTokens,
+          outputTokensRemaining: outputTokens,
           tokenResetDate,
+          videosProcessedThisMonth: 0, // Reset video count
+          videoResetDate: tokenResetDate,
         },
       });
 
-      logger.info("Premium tokens initialized", {
+      logger.info("Plan tokens initialized", {
         userId,
-        inputTokens: config.tokens.premiumInputTokens,
-        outputTokens: config.tokens.premiumOutputTokens,
+        plan,
+        inputTokens,
+        outputTokens,
         tokenResetDate,
       });
 
       return { success: true };
     } catch (error) {
-      logger.error("Failed to initialize premium tokens", {
+      logger.error("Failed to initialize plan tokens", {
         error: error instanceof Error ? error.message : "Unknown error",
         userId,
+        plan,
       });
       throw error instanceof AppError
         ? error
-        : new AppError("Failed to initialize premium tokens", 500);
+        : new AppError("Failed to initialize plan tokens", 500);
     }
+  }
+
+  /**
+   * @deprecated Use initializePlanTokens instead
+   * Kept for backward compatibility
+   */
+  async initializePremiumTokens(
+    userId: string,
+    billingCycleEndDate?: Date
+  ): Promise<ServiceResponse<void>> {
+    return this.initializePlanTokens(userId, UserPlan.PRO, billingCycleEndDate);
   }
 
   /**
@@ -95,19 +129,7 @@ export class TokenService {
         throw new AppError("User not found", 404);
       }
 
-      // Free users don't use token system, they use credits
-      if (user.plan === UserPlan.FREE) {
-        return {
-          success: true,
-          data: {
-            inputTokensRemaining: 0,
-            outputTokensRemaining: 0,
-            tokenResetDate: null,
-            hasEnoughTokens: true, // Free users use credit system
-            isTokensExhausted: false,
-          },
-        };
-      }
+      // All users (FREE, LITE, PRO) use token system now
 
       // Check if tokens need to be reset (billing cycle ended)
       const now = new Date();
@@ -183,19 +205,7 @@ export class TokenService {
         throw new AppError("User not found", 404);
       }
 
-      // Free users don't use token system
-      if (user.plan === UserPlan.FREE) {
-        return {
-          success: true,
-          data: {
-            inputTokensRemaining: 0,
-            outputTokensRemaining: 0,
-            tokenResetDate: null,
-            hasEnoughTokens: true,
-            isTokensExhausted: false,
-          },
-        };
-      }
+      // All users use token system now (FREE, LITE, PRO)
 
       // Check if user has enough tokens
       if (
@@ -267,8 +277,26 @@ export class TokenService {
         throw new AppError("User not found", 404);
       }
 
-      if (user.plan !== UserPlan.PREMIUM) {
-        return { success: true }; // Nothing to reset for free users
+      // Get token limits based on user's plan
+      let inputTokens: number;
+      let outputTokens: number;
+
+      switch (user.plan) {
+        case UserPlan.FREE:
+          inputTokens = config.tokens.free.input;
+          outputTokens = config.tokens.free.output;
+          break;
+        case UserPlan.LITE:
+          inputTokens = config.tokens.lite.input;
+          outputTokens = config.tokens.lite.output;
+          break;
+        case UserPlan.PRO:
+          inputTokens = config.tokens.pro.input;
+          outputTokens = config.tokens.pro.output;
+          break;
+        default:
+          inputTokens = config.tokens.free.input;
+          outputTokens = config.tokens.free.output;
       }
 
       // Calculate next reset date (next billing cycle)
@@ -277,16 +305,19 @@ export class TokenService {
       await prisma.user.update({
         where: { id: userId },
         data: {
-          inputTokensRemaining: config.tokens.premiumInputTokens,
-          outputTokensRemaining: config.tokens.premiumOutputTokens,
+          inputTokensRemaining: inputTokens,
+          outputTokensRemaining: outputTokens,
           tokenResetDate: nextResetDate,
+          videosProcessedThisMonth: 0, // Reset video count
+          videoResetDate: nextResetDate,
         },
       });
 
       logger.info("Tokens reset for new billing cycle", {
         userId,
-        inputTokens: config.tokens.premiumInputTokens,
-        outputTokens: config.tokens.premiumOutputTokens,
+        plan: user.plan,
+        inputTokens,
+        outputTokens,
         nextResetDate,
       });
 
@@ -321,19 +352,7 @@ export class TokenService {
         throw new AppError("User not found", 404);
       }
 
-      // Free users don't use token system
-      if (user.plan === UserPlan.FREE) {
-        return {
-          success: true,
-          data: {
-            inputTokensRemaining: 0,
-            outputTokensRemaining: 0,
-            tokenResetDate: null,
-            hasEnoughTokens: true,
-            isTokensExhausted: false,
-          },
-        };
-      }
+      // All users use token system now (FREE, LITE, PRO)
 
       // Check if tokens need to be reset
       const now = new Date();
@@ -367,7 +386,7 @@ export class TokenService {
   }
 
   /**
-   * Reset all premium users' tokens (cron job for billing cycle)
+   * Reset all paid users' tokens (cron job for billing cycle)
    */
   async resetAllPremiumTokens(): Promise<
     ServiceResponse<{ usersUpdated: number }>
@@ -375,29 +394,51 @@ export class TokenService {
     try {
       const now = new Date();
 
-      // Find premium users whose token reset date has passed
+      // Find paid users (LITE or PRO) whose token reset date has passed
       const usersToReset = await prisma.user.findMany({
         where: {
-          plan: UserPlan.PREMIUM,
+          plan: {
+            in: [UserPlan.LITE, UserPlan.PRO],
+          },
           tokenResetDate: {
             lte: now,
           },
         },
-        select: { id: true, nextBillingDate: true },
+        select: { id: true, plan: true, nextBillingDate: true },
       });
 
       let updatedCount = 0;
 
       for (const user of usersToReset) {
         try {
+          // Get token limits based on user's plan
+          let inputTokens: number;
+          let outputTokens: number;
+
+          switch (user.plan) {
+            case UserPlan.LITE:
+              inputTokens = config.tokens.lite.input;
+              outputTokens = config.tokens.lite.output;
+              break;
+            case UserPlan.PRO:
+              inputTokens = config.tokens.pro.input;
+              outputTokens = config.tokens.pro.output;
+              break;
+            default:
+              inputTokens = config.tokens.free.input;
+              outputTokens = config.tokens.free.output;
+          }
+
           const nextResetDate = user.nextBillingDate || this.getNextMonthDate();
 
           await prisma.user.update({
             where: { id: user.id },
             data: {
-              inputTokensRemaining: config.tokens.premiumInputTokens,
-              outputTokensRemaining: config.tokens.premiumOutputTokens,
+              inputTokensRemaining: inputTokens,
+              outputTokensRemaining: outputTokens,
               tokenResetDate: nextResetDate,
+              videosProcessedThisMonth: 0,
+              videoResetDate: nextResetDate,
             },
           });
 

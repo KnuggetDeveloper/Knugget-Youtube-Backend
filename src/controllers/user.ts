@@ -126,7 +126,7 @@ export class UserController {
 
     const { plan } = req.body;
 
-    if (!plan || !['FREE', 'PREMIUM'].includes(plan)) {
+    if (!plan || !['FREE', 'LITE', 'PRO'].includes(plan)) {
       const response: ApiResponse = {
         success: false,
         error: 'Invalid plan type',

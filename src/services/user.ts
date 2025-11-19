@@ -138,7 +138,8 @@ export class UserService {
         where: { id: userId },
         select: {
           plan: true,
-          credits: true,
+          videosProcessedThisMonth: true,
+          videoResetDate: true,
           createdAt: true,
           inputTokensRemaining: true,
           outputTokensRemaining: true,
@@ -168,13 +169,23 @@ export class UserService {
         },
       });
 
-      // Calculate credits used (assuming user started with max credits)
-      const maxCredits =
-        user.plan === "PREMIUM"
-          ? config.credits.premiumMonthly
-          : config.credits.freeMonthly;
+      // Get video limit based on plan
+      let videoLimit: number;
+      switch (user.plan) {
+        case "FREE":
+          videoLimit = config.videoLimits.free;
+          break;
+        case "LITE":
+          videoLimit = config.videoLimits.lite;
+          break;
+        case "PRO":
+          videoLimit = config.videoLimits.pro;
+          break;
+        default:
+          videoLimit = config.videoLimits.free;
+      }
 
-      const creditsUsed = Math.max(0, maxCredits - user.credits);
+      const videosProcessed = user.videosProcessedThisMonth || 0;
 
       // Get OpenAI usage statistics (with fallback for backward compatibility)
       let openaiUsageStats = {
@@ -202,17 +213,18 @@ export class UserService {
       }
 
       const stats: UserStats = {
-        totalSummaries: user._count.summaries,
+        totalSummaries: user._count?.summaries || 0,
         summariesThisMonth,
-        creditsUsed,
-        creditsRemaining: user.credits,
+        videosProcessed,
+        videoLimit,
+        videosRemaining: Math.max(0, videoLimit - videosProcessed),
         planStatus: user.plan,
         joinedDate: user.createdAt.toISOString(),
         // OpenAI Usage stats
         totalInputTokens: openaiUsageStats._sum.promptTokens ?? 0,
         totalOutputTokens: openaiUsageStats._sum.completionTokens ?? 0,
         totalTokens: openaiUsageStats._sum.totalTokens ?? 0,
-        // Premium token stats
+        // Token limits per plan
         inputTokensRemaining: user.inputTokensRemaining,
         outputTokensRemaining: user.outputTokensRemaining,
         tokenResetDate: user.tokenResetDate?.toISOString() || null,
@@ -230,101 +242,29 @@ export class UserService {
     }
   }
 
-  // Add credits to user account
+  // DEPRECATED: Credits system removed - using video limits now
+  // These methods kept for backward compatibility but do nothing
   async addCredits(
     userId: string,
     credits: number
   ): Promise<ServiceResponse<{ newBalance: number }>> {
-    try {
-      if (credits <= 0) {
-        throw new AppError("Credits must be positive", 400);
-      }
-
-      const updatedUser = await prisma.user.update({
-        where: { id: userId },
-        data: {
-          credits: { increment: credits },
-        },
-        select: { credits: true },
-      });
-
-      logger.info("Credits added to user", {
-        userId,
-        creditsAdded: credits,
-        newBalance: updatedUser.credits,
-      });
-
-      return {
-        success: true,
-        data: { newBalance: updatedUser.credits },
-      };
-    } catch (error) {
-      logger.error("Add credits failed", {
-        error: error instanceof Error ? error.message : "Unknown error",
-        userId,
-        credits,
-      });
-      throw error instanceof AppError
-        ? error
-        : new AppError("Failed to add credits", 500);
-    }
+    logger.warn("addCredits called but credits system is deprecated", {
+      userId,
+    });
+    return { success: true, data: { newBalance: 0 } };
   }
 
-  // Deduct credits from user account
   async deductCredits(
     userId: string,
     credits: number
   ): Promise<ServiceResponse<{ newBalance: number }>> {
-    try {
-      if (credits <= 0) {
-        throw new AppError("Credits must be positive", 400);
-      }
-
-      // Check current balance
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { credits: true },
-      });
-
-      if (!user) {
-        throw new AppError("User not found", 404);
-      }
-
-      if (user.credits < credits) {
-        throw new AppError("Insufficient credits", 402);
-      }
-
-      const updatedUser = await prisma.user.update({
-        where: { id: userId },
-        data: {
-          credits: { decrement: credits },
-        },
-        select: { credits: true },
-      });
-
-      logger.info("Credits deducted from user", {
-        userId,
-        creditsDeducted: credits,
-        newBalance: updatedUser.credits,
-      });
-
-      return {
-        success: true,
-        data: { newBalance: updatedUser.credits },
-      };
-    } catch (error) {
-      logger.error("Deduct credits failed", {
-        error: error instanceof Error ? error.message : "Unknown error",
-        userId,
-        credits,
-      });
-      throw error instanceof AppError
-        ? error
-        : new AppError("Failed to deduct credits", 500);
-    }
+    logger.warn("deductCredits called but credits system is deprecated", {
+      userId,
+    });
+    return { success: true, data: { newBalance: 0 } };
   }
 
-  // Upgrade user plan
+  // Upgrade user plan (now initializes tokens for the new plan)
   async upgradePlan(
     userId: string,
     newPlan: UserPlan
@@ -343,18 +283,11 @@ export class UserService {
         throw new AppError(`User is already on ${newPlan} plan`, 400);
       }
 
-      // Calculate credits to add based on plan upgrade
-      let creditsToAdd = 0;
-      if (newPlan === "PREMIUM" && user.plan === "FREE") {
-        creditsToAdd =
-          config.credits.premiumMonthly - config.credits.freeMonthly;
-      }
-
+      // Update plan
       const updatedUser = await prisma.user.update({
         where: { id: userId },
         data: {
           plan: newPlan,
-          ...(creditsToAdd > 0 && { credits: { increment: creditsToAdd } }),
         },
         select: {
           id: true,
@@ -362,7 +295,6 @@ export class UserService {
           name: true,
           avatar: true,
           plan: true,
-          credits: true,
           subscriptionId: true,
           emailVerified: true,
           createdAt: true,
@@ -370,13 +302,15 @@ export class UserService {
         },
       });
 
+      // Initialize tokens for the new plan
+      await tokenService.initializePlanTokens(userId, newPlan);
+
       const profile: UserProfile = {
         id: updatedUser.id,
         email: updatedUser.email,
         name: updatedUser.name,
         avatar: updatedUser.avatar,
         plan: updatedUser.plan,
-        credits: updatedUser.credits,
         subscriptionId: updatedUser.subscriptionId,
         emailVerified: updatedUser.emailVerified,
         createdAt: updatedUser.createdAt.toISOString(),
@@ -387,7 +321,6 @@ export class UserService {
         userId,
         oldPlan: user.plan,
         newPlan,
-        creditsAdded: creditsToAdd,
       });
 
       return { success: true, data: profile };
@@ -403,45 +336,34 @@ export class UserService {
     }
   }
 
-  // Reset monthly credits and tokens (should be called by a cron job)
+  // Reset monthly videos and tokens (should be called by a cron job)
   async resetMonthlyCredits(): Promise<
     ServiceResponse<{ usersUpdated: number; tokensReset: number }>
   > {
     try {
-      // Reset credits for all users based on their plan
-      const [freeUsersResult, premiumUsersResult] = await Promise.all([
-        prisma.user.updateMany({
-          where: { plan: "FREE" },
-          data: { credits: config.credits.freeMonthly },
-        }),
-        prisma.user.updateMany({
-          where: { plan: "PREMIUM" },
-          data: { credits: config.credits.premiumMonthly },
-        }),
-      ]);
+      // Reset video counts for all users
+      const videoResetResult = await prisma.user.updateMany({
+        data: { videosProcessedThisMonth: 0 },
+      });
 
-      const totalUpdated = freeUsersResult.count + premiumUsersResult.count;
-
-      // Reset tokens for premium users
+      // Reset tokens for paid users (LITE and PRO)
       const tokenResetResult = await tokenService.resetAllPremiumTokens();
       const tokensReset = tokenResetResult.success
         ? tokenResetResult.data?.usersUpdated || 0
         : 0;
 
-      logger.info("Monthly credits and tokens reset", {
-        freeUsers: freeUsersResult.count,
-        premiumUsers: premiumUsersResult.count,
-        totalUsers: totalUpdated,
+      logger.info("Monthly videos and tokens reset", {
+        videosReset: videoResetResult.count,
         tokensReset,
       });
 
       return {
         success: true,
-        data: { usersUpdated: totalUpdated, tokensReset },
+        data: { usersUpdated: videoResetResult.count, tokensReset },
       };
     } catch (error) {
-      logger.error("Monthly credits reset failed", { error });
-      throw new AppError("Failed to reset monthly credits", 500);
+      logger.error("Monthly reset failed", { error });
+      throw new AppError("Failed to reset monthly limits", 500);
     }
   }
 
