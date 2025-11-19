@@ -229,7 +229,10 @@ class PaymentService {
           },
         ],
         customer: { name: user.name, email: user.email },
-        return_url: `${this.paymentConfig.frontendUrl}/success`,
+        return_url: `${this.paymentConfig.frontendUrl.replace(
+          /\/$/,
+          ""
+        )}/success`,
       };
 
       console.log("📤 Request body:", JSON.stringify(requestBody, null, 2));
