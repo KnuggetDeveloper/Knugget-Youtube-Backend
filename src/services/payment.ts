@@ -41,7 +41,7 @@ class PaymentService {
       console.log(`🔄 Syncing subscription ${subscriptionId} for ${email}`);
 
       const response = await fetch(
-        `${this.DODO_BASE_URL}/subscriptions/${subscriptionId}`,
+        `${this.DODO_BASE_URL}/api/v1/subscriptions/${subscriptionId}`,
         {
           headers: {
             Authorization: `Bearer ${this.DODO_API_KEY}`,
@@ -216,31 +216,64 @@ class PaymentService {
         `🚀 Creating checkout for ${selectedPlan} plan with DodoPayments...`
       );
       console.log(`📦 Using product ID: ${productId}`);
+      console.log(`🌐 Endpoint: ${this.DODO_BASE_URL}/api/v1/checkout`);
+      console.log(
+        `🔑 API Key (first 10 chars): ${this.DODO_API_KEY.substring(0, 10)}...`
+      );
+
+      const requestBody = {
+        product_cart: [
+          {
+            product_id: productId.trim(),
+            quantity: 1,
+          },
+        ],
+        customer: { name: user.name, email: user.email },
+        return_url: `${this.paymentConfig.frontendUrl}/success`,
+      };
+
+      console.log("📤 Request body:", JSON.stringify(requestBody, null, 2));
 
       // Create checkout session
-      const response = await fetch(`${this.DODO_BASE_URL}/checkouts`, {
+      const response = await fetch(`${this.DODO_BASE_URL}/api/v1/checkout`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.DODO_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          product_cart: [
-            {
-              product_id: productId.trim(),
-              quantity: 1,
-            },
-          ],
-          customer: { name: user.name, email: user.email },
-          return_url: `${this.paymentConfig.frontendUrl}/success`,
-        }),
+        body: JSON.stringify(requestBody),
       });
-
-      const data = await response.json();
 
       console.log("📊 DodoPayments response status:", response.status);
       console.log(
-        "📊 DodoPayments response data:",
+        "📊 DodoPayments response content-type:",
+        response.headers.get("content-type")
+      );
+
+      // Handle empty response
+      const responseText = await response.text();
+      console.log(
+        "📊 DodoPayments raw response:",
+        responseText.substring(0, 500)
+      );
+
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch (parseError) {
+        console.error("❌ Failed to parse response:", responseText);
+        return {
+          success: false,
+          error: `DodoPayments returned invalid response: ${responseText.substring(
+            0,
+            200
+          )}`,
+          statusCode: response.status,
+        };
+      }
+
+      console.log(
+        "📊 DodoPayments parsed data:",
         JSON.stringify(data, null, 2)
       );
 
@@ -338,7 +371,7 @@ class PaymentService {
 
       // Fetch current status from DodoPayments (always return fresh data)
       const response = await fetch(
-        `${this.DODO_BASE_URL}/subscriptions/${userData.subscriptionId}`,
+        `${this.DODO_BASE_URL}/api/v1/subscriptions/${userData.subscriptionId}`,
         {
           headers: {
             Authorization: `Bearer ${this.DODO_API_KEY}`,
@@ -416,7 +449,7 @@ class PaymentService {
 
       // Get subscription details from DodoPayments
       const response = await fetch(
-        `${this.DODO_BASE_URL}/subscriptions/${userData.subscriptionId}`,
+        `${this.DODO_BASE_URL}/api/v1/subscriptions/${userData.subscriptionId}`,
         {
           headers: {
             Authorization: `Bearer ${this.DODO_API_KEY}`,
@@ -546,7 +579,7 @@ User will keep premium access until next billing date.
 
       if (subscriptionId) {
         const response = await fetch(
-          `${this.DODO_BASE_URL}/subscriptions/${subscriptionId}`,
+          `${this.DODO_BASE_URL}/api/v1/subscriptions/${subscriptionId}`,
           {
             headers: { Authorization: `Bearer ${this.DODO_API_KEY}` },
           }
