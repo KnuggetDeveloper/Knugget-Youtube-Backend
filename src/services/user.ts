@@ -23,7 +23,6 @@ export class UserService {
           name: true,
           avatar: true,
           plan: true,
-          credits: true,
           subscriptionId: true,
           emailVerified: true,
           createdAt: true,
@@ -31,6 +30,8 @@ export class UserService {
           inputTokensRemaining: true,
           outputTokensRemaining: true,
           tokenResetDate: true,
+          videosProcessedThisMonth: true,
+          videoResetDate: true,
         },
       });
 
@@ -44,7 +45,6 @@ export class UserService {
         name: user.name,
         avatar: user.avatar,
         plan: user.plan,
-        credits: user.credits,
         subscriptionId: user.subscriptionId,
         emailVerified: user.emailVerified,
         createdAt: user.createdAt.toISOString(),
@@ -52,6 +52,8 @@ export class UserService {
         inputTokensRemaining: user.inputTokensRemaining,
         outputTokensRemaining: user.outputTokensRemaining,
         tokenResetDate: user.tokenResetDate?.toISOString() || null,
+        videosProcessedThisMonth: user.videosProcessedThisMonth,
+        videoResetDate: user.videoResetDate?.toISOString() || null,
       };
 
       return { success: true, data: profile };
@@ -92,7 +94,6 @@ export class UserService {
           name: true,
           avatar: true,
           plan: true,
-          credits: true,
           subscriptionId: true,
           emailVerified: true,
           createdAt: true,
@@ -106,7 +107,6 @@ export class UserService {
         name: updatedUser.name,
         avatar: updatedUser.avatar,
         plan: updatedUser.plan,
-        credits: updatedUser.credits,
         subscriptionId: updatedUser.subscriptionId,
         emailVerified: updatedUser.emailVerified,
         createdAt: updatedUser.createdAt.toISOString(),
@@ -414,7 +414,6 @@ export class UserService {
           name: true,
           avatar: true,
           plan: true,
-          credits: true,
           subscriptionId: true,
           emailVerified: true,
           createdAt: true,
@@ -422,6 +421,8 @@ export class UserService {
           inputTokensRemaining: true,
           outputTokensRemaining: true,
           tokenResetDate: true,
+          videosProcessedThisMonth: true,
+          videoResetDate: true,
         },
       });
 
@@ -435,7 +436,6 @@ export class UserService {
         name: user.name,
         avatar: user.avatar,
         plan: user.plan,
-        credits: user.credits,
         subscriptionId: user.subscriptionId,
         emailVerified: user.emailVerified,
         createdAt: user.createdAt.toISOString(),
@@ -443,6 +443,8 @@ export class UserService {
         inputTokensRemaining: user.inputTokensRemaining,
         outputTokensRemaining: user.outputTokensRemaining,
         tokenResetDate: user.tokenResetDate?.toISOString() || null,
+        videosProcessedThisMonth: user.videosProcessedThisMonth,
+        videoResetDate: user.videoResetDate?.toISOString() || null,
       };
 
       return { success: true, data: profile };
