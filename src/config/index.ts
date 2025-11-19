@@ -28,7 +28,7 @@ const configSchema = z.object({
 
   // DODOpayment
   DODO_PAYMENTS_API_KEY: z.string().min(1),
-  DODO_BASE_URL: z.string().url().default("https://api.dodopayments.com"),
+  DODO_BASE_URL: z.string().url().default("https://live.dodopayments.com"),
   DODO_WEBHOOK_SECRET: z.string().min(1).optional(),
   DODO_PAYMENTS_ENVIRONMENT: z.string().default("live_mode"),
   PRODUCT_ID_LITE: z.string().min(1), // Knugget Lite plan product ID
