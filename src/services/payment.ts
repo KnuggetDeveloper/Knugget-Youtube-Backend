@@ -41,7 +41,7 @@ class PaymentService {
       console.log(`🔄 Syncing subscription ${subscriptionId} for ${email}`);
 
       const response = await fetch(
-        `${this.DODO_BASE_URL}/api/v1/subscriptions/${subscriptionId}`,
+        `${this.DODO_BASE_URL}/subscriptions/${subscriptionId}`,
         {
           headers: {
             Authorization: `Bearer ${this.DODO_API_KEY}`,
@@ -216,7 +216,7 @@ class PaymentService {
         `🚀 Creating checkout for ${selectedPlan} plan with DodoPayments...`
       );
       console.log(`📦 Using product ID: ${productId}`);
-      console.log(`🌐 Endpoint: ${this.DODO_BASE_URL}/api/v1/checkout`);
+      console.log(`🌐 Endpoint: ${this.DODO_BASE_URL}/checkouts`);
       console.log(
         `🔑 API Key (first 10 chars): ${this.DODO_API_KEY.substring(0, 10)}...`
       );
@@ -237,8 +237,8 @@ class PaymentService {
 
       console.log("📤 Request body:", JSON.stringify(requestBody, null, 2));
 
-      // Create checkout session
-      const response = await fetch(`${this.DODO_BASE_URL}/api/v1/checkout`, {
+      // Create checkout session (using correct endpoint from DodoPayments documentation)
+      const response = await fetch(`${this.DODO_BASE_URL}/checkouts`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.DODO_API_KEY}`,
@@ -395,7 +395,7 @@ class PaymentService {
 
       // Fetch current status from DodoPayments (always return fresh data)
       const response = await fetch(
-        `${this.DODO_BASE_URL}/api/v1/subscriptions/${userData.subscriptionId}`,
+        `${this.DODO_BASE_URL}/subscriptions/${userData.subscriptionId}`,
         {
           headers: {
             Authorization: `Bearer ${this.DODO_API_KEY}`,
@@ -473,7 +473,7 @@ class PaymentService {
 
       // Get subscription details from DodoPayments
       const response = await fetch(
-        `${this.DODO_BASE_URL}/api/v1/subscriptions/${userData.subscriptionId}`,
+        `${this.DODO_BASE_URL}/subscriptions/${userData.subscriptionId}`,
         {
           headers: {
             Authorization: `Bearer ${this.DODO_API_KEY}`,
@@ -603,7 +603,7 @@ User will keep premium access until next billing date.
 
       if (subscriptionId) {
         const response = await fetch(
-          `${this.DODO_BASE_URL}/api/v1/subscriptions/${subscriptionId}`,
+          `${this.DODO_BASE_URL}/subscriptions/${subscriptionId}`,
           {
             headers: { Authorization: `Bearer ${this.DODO_API_KEY}` },
           }
