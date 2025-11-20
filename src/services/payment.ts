@@ -276,10 +276,9 @@ class PaymentService {
         console.error("❌ Parse error details:", parseError);
         return {
           success: false,
-          error: `DodoPayments returned invalid response (status ${response.status}): ${responseText.substring(
-            0,
-            200
-          )}`,
+          error: `DodoPayments returned invalid response (status ${
+            response.status
+          }): ${responseText.substring(0, 200)}`,
           statusCode: response.status,
         };
       }
@@ -314,11 +313,17 @@ class PaymentService {
         console.error("  Error Data:", JSON.stringify(data, null, 2));
         console.error("  Product ID used:", productId);
         console.error("  Base URL:", this.DODO_BASE_URL);
-        console.error("  API Key (first 15):", this.DODO_API_KEY.substring(0, 15) + "...");
-        
+        console.error(
+          "  API Key (first 15):",
+          this.DODO_API_KEY.substring(0, 15) + "..."
+        );
+
         return {
           success: false,
-          error: data.message || data.error || `HTTP ${response.status}: Product not found or invalid`,
+          error:
+            data.message ||
+            data.error ||
+            `HTTP ${response.status}: Product not found or invalid`,
           statusCode: 400,
         };
       }
