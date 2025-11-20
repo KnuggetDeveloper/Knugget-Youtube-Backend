@@ -248,10 +248,17 @@ class PaymentService {
       });
 
       console.log("📊 DodoPayments response status:", response.status);
+      console.log("📊 DodoPayments response status text:", response.statusText);
       console.log(
         "📊 DodoPayments response content-type:",
         response.headers.get("content-type")
       );
+
+      // Log ALL response headers for debugging
+      console.log("📊 DodoPayments response headers:");
+      response.headers.forEach((value, key) => {
+        console.log(`  ${key}: ${value}`);
+      });
 
       // Handle empty response
       const responseText = await response.text();
@@ -259,15 +266,17 @@ class PaymentService {
         "📊 DodoPayments raw response:",
         responseText.substring(0, 500)
       );
+      console.log("📊 DodoPayments response length:", responseText.length);
 
       let data;
       try {
         data = responseText ? JSON.parse(responseText) : {};
       } catch (parseError) {
         console.error("❌ Failed to parse response:", responseText);
+        console.error("❌ Parse error details:", parseError);
         return {
           success: false,
-          error: `DodoPayments returned invalid response: ${responseText.substring(
+          error: `DodoPayments returned invalid response (status ${response.status}): ${responseText.substring(
             0,
             200
           )}`,
@@ -299,10 +308,17 @@ class PaymentService {
           },
         };
       } else {
-        console.error("❌ DodoPayments error:", data);
+        console.error("❌ DodoPayments error response:");
+        console.error("  Status:", response.status);
+        console.error("  Status Text:", response.statusText);
+        console.error("  Error Data:", JSON.stringify(data, null, 2));
+        console.error("  Product ID used:", productId);
+        console.error("  Base URL:", this.DODO_BASE_URL);
+        console.error("  API Key (first 15):", this.DODO_API_KEY.substring(0, 15) + "...");
+        
         return {
           success: false,
-          error: data,
+          error: data.message || data.error || `HTTP ${response.status}: Product not found or invalid`,
           statusCode: 400,
         };
       }
