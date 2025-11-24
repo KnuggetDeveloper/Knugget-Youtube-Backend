@@ -162,7 +162,58 @@ export class OpenAIService {
             {
               role: "user",
               content: `Generate a very very detailed note of all the key points mentioned in this transcript. From that generate the top 3 key takeaways, top 3 memorable quotes, top 3 examples. Present the final output starting with the top 3 key takeaways, top 3 memorable quotes, top 3 examples followed by the detailed note of all the key points.
-                    Transcript: ${transcriptText}`,
+                    Transcript: ${transcriptText}
+
+**IMPORTANT FORMATTING RULES:**
+1. Use EXACT section headers as shown below (including "Top 3")
+2. Use bullet points with dashes (-) for each item
+3. Keep each section clearly separated with blank lines
+4. For detailed notes, use clear subsection titles followed by descriptions
+
+**REQUIRED OUTPUT STRUCTURE:**
+
+Top 3 Key Takeaways
+- [First key takeaway - be specific and detailed]
+- [Second key takeaway - be specific and detailed]  
+- [Third key takeaway - be specific and detailed]
+
+Top 3 Memorable Quotes
+- [First memorable quote from the transcript]
+- [Second memorable quote from the transcript]
+- [Third memorable quote from the transcript]
+
+Top 3 Examples
+- [First example or case study mentioned]
+- [Second example or case study mentioned]
+- [Third example or case study mentioned]
+
+Detailed Note of All Key Points
+- [Subsection Title 1]: [Detailed explanation of this topic covered in the transcript, including context and key details]
+- [Subsection Title 2]: [Detailed explanation of this topic covered in the transcript, including context and key details]
+- [Subsection Title 3]: [Detailed explanation of this topic covered in the transcript, including context and key details]
+[Continue with more subsections covering all major topics]
+
+**EXAMPLE OF DESIRED OUTPUT:**
+
+Top 3 Key Takeaways
+- The decade of agents vs. year of agents: Andre Karpathy argues that progress will come from progressively capable, multimodal agents that can operate with real-world tasks over a decade, rather than expecting a single 'year of AGI.' This framing emphasizes a staged, additive progression across representations, memory, and interaction with the world.
+- Pre-training vs. context learning; cognitive core concept: He distinguishes between pre-training (large token-based knowledge encoding with heavy compression) and in-context learning (dynamic working memory, near-term adaptation). He envisions a cognitive core—a lean, memory-light core containing algorithms and problem-solving strategies—surrounded by knowledge that could be distilled or reduced to avoid collapse and improve long-horizon reasoning.
+- Education as a crucial frontier and societal anchor: Beyond engineering progress, Karpathy is pursuing Eureka and Starfleet Academy as ways to reshape education with AI tutors, ramps to knowledge, and scalable training for millions. He envisions a future where education transforms fundamentally with AI.
+
+Top 3 Memorable Quotes
+- "We're not actually building animals. We're building ghosts."
+- "Sucking supervision through a straw."
+- "Education will pretty fundamentally change with AI on the side... not just as prompting, but as a tutor that understands you and adapts."
+
+Top 3 Examples
+- Nanochat project and the discussion of how to build and learn from code: Andre describes Nanohat as a minimal, end-to-end repo with around 8,000 lines, aimed at teaching people to build a complete coding agent; the emphasis on not copy-pasting code to force genuine understanding is a concrete example of his learning philosophy.
+- The "Sucking supervision through a straw" analogy for RL: He contrasts RL's high-variance, final-reward-upweighting with how humans get feedback; this analogy demonstrates his critique of current reinforcement learning methods.
+- Eureka and Starfleet Academy projects: His pursuit of AI-powered tutoring systems as practical implementations of his vision for transforming education at scale.
+
+Detailed Note of All Key Points
+- General stance on reinforcement learning (RL) and optimism: He begins by calling RL "terrible" in the abstract but insists that prior approaches were worse and that progress is tractable and optimistic. The chatter on social media (fundraising, hype) clouds practical progress; his focus is on building useful systems, not ghostly demos.
+- The decade vs. year framing for agents: The phrase "the decade of agents" is a reaction to the claim that we're in the year of agents due to LLMs; he believes the trend will unfold over a decade with gradual improvements. Early agents (Cloud, CodeEx, etc.) are impressive and used daily, but significant work remains: multimodality, reasoning, memory integration, tool use, and more.
+`,
             },
           ],
           reasoning_effort: "minimal",
@@ -300,13 +351,20 @@ export class OpenAIService {
                 },
                 {
                   role: "user",
-                  content: `Generate a very very detailed note of all the key points mentioned in this transcript chunk (Part ${
-                    i + 1
-                  } of ${
+                  content: `Analyze this transcript chunk (Part ${i + 1} of ${
                     chunks.length
-                  }). Extract key takeaways, memorable quotes, and examples from this section.
-                    
-                    Transcript: ${chunkText}`,
+                  }) and extract:
+
+**Extract from this chunk:**
+- Key takeaways (important insights)
+- Memorable quotes (if any)
+- Examples or case studies (if any)
+- Detailed notes with subsection titles
+
+**Format each item with bullet points using dashes (-)**
+
+Transcript Chunk ${i + 1}/${chunks.length}:
+${chunkText}`,
                 },
               ],
               reasoning_effort: "minimal",
@@ -410,7 +468,32 @@ export class OpenAIService {
 
 ${combinedSummary}
 
-Now, generate a very very detailed note of all the key points mentioned across all parts. From that generate the top 3 key takeaways, top 3 memorable quotes, top 3 examples. Present the final output starting with the top 3 key takeaways, top 3 memorable quotes, top 3 examples followed by the detailed note of all the key points.`,
+Now Generate a very very detailed note of all the key points mentioned in this transcript. From that generate the top 3 key takeaways, top 3 memorable quotes, top 3 examples. Present the final output starting with the top 3 key takeaways, top 3 memorable quotes, top 3 examples followed by the detailed note of all the key points.
+
+**REQUIRED OUTPUT STRUCTURE:**
+
+Top 3 Key Takeaways
+- [First key takeaway - synthesized from all parts]
+- [Second key takeaway - synthesized from all parts]
+- [Third key takeaway - synthesized from all parts]
+
+Top 3 Memorable Quotes
+- [First memorable quote from the transcript]
+- [Second memorable quote from the transcript]
+- [Third memorable quote from the transcript]
+
+Top 3 Examples
+- [First example or case study mentioned across all parts]
+- [Second example or case study mentioned across all parts]
+- [Third example or case study mentioned across all parts]
+
+Detailed Note of All Key Points
+- [Subsection Title 1]: [Detailed explanation synthesizing information from all parts]
+- [Subsection Title 2]: [Detailed explanation synthesizing information from all parts]
+- [Subsection Title 3]: [Detailed explanation synthesizing information from all parts]
+[Continue with more subsections covering all major topics]
+
+**Use bullet points with dashes (-) and clear section headers.**`,
             },
           ],
           reasoning_effort: "minimal",
