@@ -120,6 +120,12 @@ export class SummaryService {
         );
       }
 
+      // Increment video count immediately after successful generation
+      await prisma.user.update({
+        where: { id: userId },
+        data: { videosProcessedThisMonth: { increment: 1 } },
+      });
+
       // Return generated summary data without saving to database
       const summaryData: SummaryData = {
         id: "", // Empty ID indicates this hasn't been saved yet
@@ -142,7 +148,7 @@ export class SummaryService {
         isUnsaved: true, // Flag to indicate this summary hasn't been saved
       };
 
-      logger.info("Summary generated successfully (not saved)", {
+      logger.info("Summary generated successfully (video count incremented)", {
         userId,
         videoId: data.videoMetadata.videoId,
         keyPointsCount: aiResult.data.keyPoints.length,
@@ -282,13 +288,7 @@ export class SummaryService {
           },
         });
 
-        // Increment video count after successful save
-        if (shouldIncrementVideo) {
-          await prisma.user.update({
-            where: { id: userId },
-            data: { videosProcessedThisMonth: { increment: 1 } },
-          });
-        }
+        // Video count already incremented during generation, don't increment again
       }
 
       logger.info("Summary saved successfully", {
