@@ -270,15 +270,10 @@ export class OpenAIService {
       const chunks = this.chunkTranscript(transcript);
       const chunkSummaries: string[] = [];
 
-      // Process each chunk
+      // Process each chunk with the same detailed prompt
       for (let i = 0; i < chunks.length; i++) {
         try {
           const chunkText = this.formatTranscriptForAI(chunks[i]);
-          const chunkPrompt = this.createChunkSummaryPrompt(
-            chunkText,
-            i + 1,
-            chunks.length
-          );
 
           logger.info("Processing chunk", {
             chunkIndex: i + 1,
@@ -286,31 +281,57 @@ export class OpenAIService {
             chunkLength: chunkText.length,
           });
 
-          const completion = await this.client.chat.completions.create({
-            model: config.openai.model,
-            messages: [
-              {
-                role: "system",
-                content:
-                  "You are an AI assistant that creates concise summaries of video transcript chunks.",
-              },
-              {
-                role: "user",
-                content: chunkPrompt,
-              },
-            ],
-            max_tokens: 500,
-            temperature: 0.3,
+          const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+          const OPENAI_API_KEY = config.openai.apiKey;
+
+          const response = await fetch(OPENAI_API_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${OPENAI_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: "gpt-5-nano",
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "You are a helpful assistant that creates concise summaries and extracts key points from transcripts.",
+                },
+                {
+                  role: "user",
+                  content: `Generate a very very detailed note of all the key points mentioned in this transcript chunk (Part ${
+                    i + 1
+                  } of ${
+                    chunks.length
+                  }). Extract key takeaways, memorable quotes, and examples from this section.
+                    
+                    Transcript: ${chunkText}`,
+                },
+              ],
+              reasoning_effort: "minimal",
+              verbosity: "high",
+            }),
           });
 
+          if (!response.ok) {
+            throw new AppError(
+              `OpenAI API error for chunk ${i + 1}: ${response.status}`,
+              response.status
+            );
+          }
+
+          const responseData = await response.json();
+          const chunkSummary = responseData.choices?.[0]?.message?.content;
+
           // Track usage for chunk processing
-          if (userId && completion.usage) {
+          if (userId && responseData.usage) {
             try {
               await this.trackUsage(
                 userId,
                 "chunk_summary",
-                config.openai.model,
-                completion.usage,
+                "gpt-5-nano",
+                responseData.usage,
                 videoMetadata.videoId
               );
 
@@ -323,14 +344,14 @@ export class OpenAIService {
               if (user) {
                 try {
                   await tokenService.consumeTokens(userId, {
-                    inputTokens: completion.usage.prompt_tokens,
-                    outputTokens: completion.usage.completion_tokens,
+                    inputTokens: responseData.usage.prompt_tokens,
+                    outputTokens: responseData.usage.completion_tokens,
                   });
                 } catch (tokenError) {
                   logger.warn("Failed to consume tokens for chunk", {
                     tokenError,
                     userId,
-                    usage: completion.usage,
+                    usage: responseData.usage,
                   });
                 }
               }
@@ -342,7 +363,6 @@ export class OpenAIService {
             }
           }
 
-          const chunkSummary = completion.choices[0]?.message?.content;
           if (chunkSummary) {
             chunkSummaries.push(chunkSummary);
           }
@@ -364,39 +384,57 @@ export class OpenAIService {
         }
       }
 
-      // Combine chunk summaries into final summary
+      // Combine chunk summaries into final summary using the same detailed prompt
       const combinedSummary = chunkSummaries.join("\n\n");
-      const finalPrompt = this.createFinalSummaryPrompt(
-        combinedSummary,
-        videoMetadata
-      );
 
-      const finalCompletion = await this.client.chat.completions.create({
-        model: config.openai.model,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an AI assistant that creates final summaries from multiple text chunks, extracting key points and themes.",
-          },
-          {
-            role: "user",
-            content: finalPrompt,
-          },
-        ],
-        max_tokens: config.openai.maxTokens,
-        temperature: 0.3,
-        response_format: { type: "json_object" },
+      const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+      const OPENAI_API_KEY = config.openai.apiKey;
+
+      const finalResponse = await fetch(OPENAI_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-5-nano",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a helpful assistant that creates concise summaries and extracts key points from transcripts.",
+            },
+            {
+              role: "user",
+              content: `I have processed a long transcript in multiple parts. Here are the detailed notes from each part:
+
+${combinedSummary}
+
+Now, generate a very very detailed note of all the key points mentioned across all parts. From that generate the top 3 key takeaways, top 3 memorable quotes, top 3 examples. Present the final output starting with the top 3 key takeaways, top 3 memorable quotes, top 3 examples followed by the detailed note of all the key points.`,
+            },
+          ],
+          reasoning_effort: "minimal",
+          verbosity: "high",
+        }),
       });
 
+      if (!finalResponse.ok) {
+        throw new AppError(
+          `OpenAI API error for final summary: ${finalResponse.status}`,
+          finalResponse.status
+        );
+      }
+
+      const finalResponseData = await finalResponse.json();
+
       // Track usage for final summary
-      if (userId && finalCompletion.usage) {
+      if (userId && finalResponseData.usage) {
         try {
           await this.trackUsage(
             userId,
             "final_summary",
-            config.openai.model,
-            finalCompletion.usage,
+            "gpt-5-nano",
+            finalResponseData.usage,
             videoMetadata.videoId
           );
 
@@ -409,14 +447,14 @@ export class OpenAIService {
           if (user) {
             try {
               await tokenService.consumeTokens(userId, {
-                inputTokens: finalCompletion.usage.prompt_tokens,
-                outputTokens: finalCompletion.usage.completion_tokens,
+                inputTokens: finalResponseData.usage.prompt_tokens,
+                outputTokens: finalResponseData.usage.completion_tokens,
               });
             } catch (tokenError) {
               logger.warn("Failed to consume tokens for final summary", {
                 tokenError,
                 userId,
-                usage: finalCompletion.usage,
+                usage: finalResponseData.usage,
               });
             }
           }
@@ -428,23 +466,21 @@ export class OpenAIService {
         }
       }
 
-      const finalResponseText = finalCompletion.choices[0]?.message?.content;
+      const finalResponseText =
+        finalResponseData.choices?.[0]?.message?.content;
       if (!finalResponseText) {
-        throw new AppError("Empty response from OpenAI", 500);
+        throw new AppError("Empty response from OpenAI for final summary", 500);
       }
 
-      const summaryData: OpenAISummaryResponse = JSON.parse(finalResponseText);
-
-      if (!this.validateSummaryResponse(summaryData)) {
-        throw new AppError("Invalid summary response structure", 500);
-      }
+      // Parse the response using the same parser as the main summary
+      const summaryData = this.parseNewFormatResponse(finalResponseText);
 
       // Add usage information to response
-      if (finalCompletion.usage) {
+      if (finalResponseData.usage) {
         summaryData.usage = {
-          promptTokens: finalCompletion.usage.prompt_tokens,
-          completionTokens: finalCompletion.usage.completion_tokens,
-          totalTokens: finalCompletion.usage.total_tokens,
+          promptTokens: finalResponseData.usage.prompt_tokens,
+          completionTokens: finalResponseData.usage.completion_tokens,
+          totalTokens: finalResponseData.usage.total_tokens,
         };
       }
 
@@ -452,6 +488,7 @@ export class OpenAIService {
         videoId: videoMetadata.videoId,
         chunksProcessed: chunks.length,
         keyPointsCount: summaryData.keyPoints.length,
+        usage: finalResponseData.usage,
       });
 
       return { success: true, data: summaryData };
@@ -504,15 +541,6 @@ export class OpenAIService {
     return transcript
       .map((segment) => `[${segment.timestamp}] ${segment.text}`)
       .join("\n");
-  }
-
-  // Create main summary prompt
-  private createSummaryPrompt(
-    transcriptText: string,
-    videoMetadata: VideoMetadata
-  ): string {
-    return `Generate a very very detailed note of all the key points mentioned in this transcript. From that generate the top 3 key takeaways, top 3 memorable quotes, top 3 examples. Present the final output starting with the top 3 key takeaways, top 3 memorable quotes, top 3 examples followed by the detailed note of all the key points.
-                    Transcript: ${transcriptText}`;
   }
 
   // Create chunk summary prompt
