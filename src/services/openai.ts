@@ -157,67 +157,52 @@ export class OpenAIService {
             {
               role: "system",
               content:
-                "You are a helpful assistant that creates concise summaries and extracts key points from transcripts.",
+                "You are a helpful assistant that creates structured summaries in JSON format. Always respond with valid JSON only.",
             },
             {
               role: "user",
-              content: `Generate a very very detailed note of all the key points mentioned in this transcript. From that generate the top 3 key takeaways, top 3 memorable quotes, top 3 examples. Present the final output starting with the top 3 key takeaways, top 3 memorable quotes, top 3 examples followed by the detailed note of all the key points.
-                    Transcript: ${transcriptText}
+              content: `Analyze this transcript and create a comprehensive summary in JSON format.
 
-**IMPORTANT FORMATTING RULES:**
-1. Use EXACT section headers as shown below (including "Top 3")
-2. Use bullet points with dashes (-) for each item
-3. Keep each section clearly separated with blank lines
-4. For detailed notes, use clear subsection titles followed by descriptions
+**REQUIRED JSON STRUCTURE:**
+{
+  "keyTakeaways": [
+    "First key takeaway - be very specific and detailed with full context",
+    "Second key takeaway - be very specific and detailed with full context",
+    "Third key takeaway - be very specific and detailed with full context"
+  ],
+  "quotes": [
+    "First memorable quote from the transcript",
+    "Second memorable quote from the transcript",
+    "Third memorable quote from the transcript"
+  ],
+  "examples": [
+    "First example or case study mentioned with full description",
+    "Second example or case study mentioned with full description",
+    "Third example or case study mentioned with full description"
+  ],
+  "detailedNotes": [
+    {
+      "title": "Topic or Section Title",
+      "content": "Detailed explanation of this topic with full context and key details"
+    }
+  ]
+}
 
-**REQUIRED OUTPUT STRUCTURE:**
+**INSTRUCTIONS:**
+1. Extract exactly 3 key takeaways (most important insights)
+2. Extract exactly 3 memorable quotes (actual quotes from the transcript)
+3. Extract exactly 3 examples (case studies, projects, or specific examples mentioned)
+4. Create multiple detailed notes covering all major topics (as many as needed)
+5. Make each item detailed and comprehensive
+6. Return ONLY valid JSON, no additional text
 
-Top 3 Key Takeaways
-- [First key takeaway - be specific and detailed]
-- [Second key takeaway - be specific and detailed]  
-- [Third key takeaway - be specific and detailed]
-
-Top 3 Memorable Quotes
-- [First memorable quote from the transcript]
-- [Second memorable quote from the transcript]
-- [Third memorable quote from the transcript]
-
-Top 3 Examples
-- [First example or case study mentioned]
-- [Second example or case study mentioned]
-- [Third example or case study mentioned]
-
-Detailed Note of All Key Points
-- [Subsection Title 1]: [Detailed explanation of this topic covered in the transcript, including context and key details]
-- [Subsection Title 2]: [Detailed explanation of this topic covered in the transcript, including context and key details]
-- [Subsection Title 3]: [Detailed explanation of this topic covered in the transcript, including context and key details]
-[Continue with more subsections covering all major topics]
-
-**EXAMPLE OF DESIRED OUTPUT:**
-
-Top 3 Key Takeaways
-- The decade of agents vs. year of agents: Andre Karpathy argues that progress will come from progressively capable, multimodal agents that can operate with real-world tasks over a decade, rather than expecting a single 'year of AGI.' This framing emphasizes a staged, additive progression across representations, memory, and interaction with the world.
-- Pre-training vs. context learning; cognitive core concept: He distinguishes between pre-training (large token-based knowledge encoding with heavy compression) and in-context learning (dynamic working memory, near-term adaptation). He envisions a cognitive core—a lean, memory-light core containing algorithms and problem-solving strategies—surrounded by knowledge that could be distilled or reduced to avoid collapse and improve long-horizon reasoning.
-- Education as a crucial frontier and societal anchor: Beyond engineering progress, Karpathy is pursuing Eureka and Starfleet Academy as ways to reshape education with AI tutors, ramps to knowledge, and scalable training for millions. He envisions a future where education transforms fundamentally with AI.
-
-Top 3 Memorable Quotes
-- "We're not actually building animals. We're building ghosts."
-- "Sucking supervision through a straw."
-- "Education will pretty fundamentally change with AI on the side... not just as prompting, but as a tutor that understands you and adapts."
-
-Top 3 Examples
-- Nanochat project and the discussion of how to build and learn from code: Andre describes Nanohat as a minimal, end-to-end repo with around 8,000 lines, aimed at teaching people to build a complete coding agent; the emphasis on not copy-pasting code to force genuine understanding is a concrete example of his learning philosophy.
-- The "Sucking supervision through a straw" analogy for RL: He contrasts RL's high-variance, final-reward-upweighting with how humans get feedback; this analogy demonstrates his critique of current reinforcement learning methods.
-- Eureka and Starfleet Academy projects: His pursuit of AI-powered tutoring systems as practical implementations of his vision for transforming education at scale.
-
-Detailed Note of All Key Points
-- General stance on reinforcement learning (RL) and optimism: He begins by calling RL "terrible" in the abstract but insists that prior approaches were worse and that progress is tractable and optimistic. The chatter on social media (fundraising, hype) clouds practical progress; his focus is on building useful systems, not ghostly demos.
-- The decade vs. year framing for agents: The phrase "the decade of agents" is a reaction to the claim that we're in the year of agents due to LLMs; he believes the trend will unfold over a decade with gradual improvements. Early agents (Cloud, CodeEx, etc.) are impressive and used daily, but significant work remains: multimodality, reasoning, memory integration, tool use, and more.
-`,
+**Transcript to analyze:**
+${transcriptText}`,
             },
           ],
           reasoning_effort: "minimal",
           verbosity: "high",
+          response_format: { type: "json_object" },
         }),
       });
 
@@ -275,8 +260,8 @@ Detailed Note of All Key Points
         }
       }
 
-      // Parse the response text to extract structured data
-      const summaryData = this.parseNewFormatResponse(responseText);
+      // Parse the JSON response
+      const summaryData = this.parseJSONResponse(responseText, videoMetadata);
 
       // Add usage information to response
       if (responseData.usage) {
@@ -347,21 +332,26 @@ Detailed Note of All Key Points
                 {
                   role: "system",
                   content:
-                    "You are a helpful assistant that creates concise summaries and extracts key points from transcripts.",
+                    "You are a helpful assistant that creates structured summaries in JSON format. Always respond with valid JSON only.",
                 },
                 {
                   role: "user",
                   content: `Analyze this transcript chunk (Part ${i + 1} of ${
                     chunks.length
-                  }) and extract:
+                  }) and extract key information in JSON format.
 
-**Extract from this chunk:**
-- Key takeaways (important insights)
-- Memorable quotes (if any)
-- Examples or case studies (if any)
-- Detailed notes with subsection titles
+**REQUIRED JSON STRUCTURE:**
+{
+  "keyTakeaways": ["insight 1", "insight 2", ...],
+  "quotes": ["quote 1", "quote 2", ...],
+  "examples": ["example 1", "example 2", ...],
+  "detailedNotes": [
+    { "title": "Topic 1", "content": "Detailed explanation..." },
+    { "title": "Topic 2", "content": "Detailed explanation..." }
+  ]
+}
 
-**Format each item with bullet points using dashes (-)**
+Extract all relevant information from this chunk. Return ONLY valid JSON, no additional text.
 
 Transcript Chunk ${i + 1}/${chunks.length}:
 ${chunkText}`,
@@ -369,6 +359,7 @@ ${chunkText}`,
               ],
               reasoning_effort: "minimal",
               verbosity: "high",
+              response_format: { type: "json_object" },
             }),
           });
 
@@ -460,44 +451,52 @@ ${chunkText}`,
             {
               role: "system",
               content:
-                "You are a helpful assistant that creates concise summaries and extracts key points from transcripts.",
+                "You are a helpful assistant that creates structured summaries in JSON format. Always respond with valid JSON only.",
             },
             {
               role: "user",
-              content: `I have processed a long transcript in multiple parts. Here are the detailed notes from each part:
+              content: `I have processed a long transcript in multiple parts. Here are the JSON summaries from each part:
 
 ${combinedSummary}
 
-Now Generate a very very detailed note of all the key points mentioned in this transcript. From that generate the top 3 key takeaways, top 3 memorable quotes, top 3 examples. Present the final output starting with the top 3 key takeaways, top 3 memorable quotes, top 3 examples followed by the detailed note of all the key points.
+Now synthesize all parts into a comprehensive final summary in JSON format.
 
-**REQUIRED OUTPUT STRUCTURE:**
+**REQUIRED JSON STRUCTURE:**
+{
+  "keyTakeaways": [
+    "First key takeaway - synthesized from all parts",
+    "Second key takeaway - synthesized from all parts",
+    "Third key takeaway - synthesized from all parts"
+  ],
+  "quotes": [
+    "First memorable quote from the transcript",
+    "Second memorable quote from the transcript",
+    "Third memorable quote from the transcript"
+  ],
+  "examples": [
+    "First example or case study mentioned across all parts",
+    "Second example or case study mentioned across all parts",
+    "Third example or case study mentioned across all parts"
+  ],
+  "detailedNotes": [
+    {
+      "title": "Topic Title",
+      "content": "Detailed explanation synthesizing information from all parts"
+    }
+  ]
+}
 
-Top 3 Key Takeaways
-- [First key takeaway - synthesized from all parts]
-- [Second key takeaway - synthesized from all parts]
-- [Third key takeaway - synthesized from all parts]
-
-Top 3 Memorable Quotes
-- [First memorable quote from the transcript]
-- [Second memorable quote from the transcript]
-- [Third memorable quote from the transcript]
-
-Top 3 Examples
-- [First example or case study mentioned across all parts]
-- [Second example or case study mentioned across all parts]
-- [Third example or case study mentioned across all parts]
-
-Detailed Note of All Key Points
-- [Subsection Title 1]: [Detailed explanation synthesizing information from all parts]
-- [Subsection Title 2]: [Detailed explanation synthesizing information from all parts]
-- [Subsection Title 3]: [Detailed explanation synthesizing information from all parts]
-[Continue with more subsections covering all major topics]
-
-**Use bullet points with dashes (-) and clear section headers.**`,
+**INSTRUCTIONS:**
+1. Synthesize the top 3 key takeaways from all parts
+2. Select the top 3 most memorable quotes from all parts
+3. Select the top 3 best examples from all parts
+4. Create comprehensive detailed notes covering all major topics
+5. Return ONLY valid JSON, no additional text`,
             },
           ],
           reasoning_effort: "minimal",
           verbosity: "high",
+          response_format: { type: "json_object" },
         }),
       });
 
@@ -555,8 +554,11 @@ Detailed Note of All Key Points
         throw new AppError("Empty response from OpenAI for final summary", 500);
       }
 
-      // Parse the response using the same parser as the main summary
-      const summaryData = this.parseNewFormatResponse(finalResponseText);
+      // Parse the JSON response
+      const summaryData = this.parseJSONResponse(
+        finalResponseText,
+        videoMetadata
+      );
 
       // Add usage information to response
       if (finalResponseData.usage) {
@@ -646,87 +648,96 @@ Detailed Note of All Key Points
   }
 
   // Parse the new format response from gpt-5-nano
-  private parseNewFormatResponse(responseText: string): OpenAISummaryResponse {
-    // Extract key takeaways, quotes, examples, and detailed notes from the response
-    const lines = responseText
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
+  private parseJSONResponse(
+    responseText: string,
+    videoMetadata: VideoMetadata
+  ): OpenAISummaryResponse {
+    try {
+      // Parse the JSON response
+      const jsonResponse = JSON.parse(responseText);
 
-    const keyPoints: string[] = [];
-    const quotes: string[] = [];
-    const examples: string[] = [];
-    let detailedNotes = "";
+      // Format the fullSummary from the structured JSON
+      let fullSummary = "";
 
-    let currentSection = "";
-    let inDetailedNotes = false;
-
-    for (const line of lines) {
-      if (
-        line.toLowerCase().includes("key takeaways") ||
-        line.toLowerCase().includes("takeaway")
-      ) {
-        currentSection = "takeaways";
-        continue;
-      } else if (
-        line.toLowerCase().includes("memorable quotes") ||
-        line.toLowerCase().includes("quote")
-      ) {
-        currentSection = "quotes";
-        continue;
-      } else if (
-        line.toLowerCase().includes("examples") ||
-        line.toLowerCase().includes("example")
-      ) {
-        currentSection = "examples";
-        continue;
-      } else if (
-        line.toLowerCase().includes("detailed note") ||
-        line.toLowerCase().includes("detailed notes")
-      ) {
-        currentSection = "detailed";
-        inDetailedNotes = true;
-        continue;
+      // Add Top 3 Key Takeaways
+      if (jsonResponse.keyTakeaways && jsonResponse.keyTakeaways.length > 0) {
+        fullSummary += "Top 3 Key Takeaways\n";
+        jsonResponse.keyTakeaways.forEach((item: string) => {
+          fullSummary += `- ${item}\n`;
+        });
+        fullSummary += "\n";
       }
 
-      if (inDetailedNotes) {
-        detailedNotes += line + "\n";
-      } else if (currentSection === "takeaways" && line.match(/^\d+\./)) {
-        keyPoints.push(line.replace(/^\d+\.\s*/, ""));
-      } else if (currentSection === "quotes" && line.match(/^\d+\./)) {
-        quotes.push(line.replace(/^\d+\.\s*/, ""));
-      } else if (currentSection === "examples" && line.match(/^\d+\./)) {
-        examples.push(line.replace(/^\d+\.\s*/, ""));
+      // Add Top 3 Memorable Quotes
+      if (jsonResponse.quotes && jsonResponse.quotes.length > 0) {
+        fullSummary += "Top 3 Memorable Quotes\n";
+        jsonResponse.quotes.forEach((item: string) => {
+          fullSummary += `- ${item}\n`;
+        });
+        fullSummary += "\n";
       }
+
+      // Add Top 3 Examples
+      if (jsonResponse.examples && jsonResponse.examples.length > 0) {
+        fullSummary += "Top 3 Examples\n";
+        jsonResponse.examples.forEach((item: string) => {
+          fullSummary += `- ${item}\n`;
+        });
+        fullSummary += "\n";
+      }
+
+      // Add Detailed Note of All Key Points
+      if (jsonResponse.detailedNotes && jsonResponse.detailedNotes.length > 0) {
+        fullSummary += "Detailed Note of All Key Points\n";
+        jsonResponse.detailedNotes.forEach(
+          (note: { title: string; content: string }) => {
+            fullSummary += `- ${note.title}: ${note.content}\n`;
+          }
+        );
+      }
+
+      // Extract key points for backward compatibility
+      const keyPoints = jsonResponse.keyTakeaways || [
+        "Key insights extracted from the video",
+      ];
+
+      // Generate tags from the content
+      const allText = fullSummary.toLowerCase();
+      const commonTags = [
+        "education",
+        "tutorial",
+        "tips",
+        "guide",
+        "learning",
+        "insights",
+        "analysis",
+      ];
+      const tags = commonTags.filter((tag) => allText.includes(tag));
+
+      // If no tags found, create some generic ones
+      if (tags.length === 0) {
+        tags.push("video-summary", "key-insights", "learning");
+      }
+
+      return {
+        keyPoints: keyPoints.slice(0, 5), // Limit to 5 key points
+        fullSummary:
+          fullSummary.trim() || "Detailed summary of the video content",
+        tags: tags.slice(0, 5), // Limit to 5 tags
+      };
+    } catch (error) {
+      logger.error("Failed to parse JSON response, falling back to text", {
+        error,
+        responsePreview: responseText.substring(0, 200),
+      });
+
+      // Fallback: return the text as-is
+      return {
+        keyPoints: ["Key insights extracted from the video"],
+        fullSummary: responseText,
+        tags: ["video-summary", "key-insights", "learning"],
+      };
     }
-
-    // Generate tags from the content
-    const allText = responseText.toLowerCase();
-    const commonTags = [
-      "education",
-      "tutorial",
-      "tips",
-      "guide",
-      "learning",
-      "insights",
-      "analysis",
-    ];
-    const tags = commonTags.filter((tag) => allText.includes(tag));
-
-    // If no tags found, create some generic ones
-    if (tags.length === 0) {
-      tags.push("video-summary", "key-insights", "learning");
-    }
-
-    return {
-      keyPoints:
-        keyPoints.length > 0
-          ? keyPoints
-          : ["Key insights extracted from the video"],
-      fullSummary:
-        detailedNotes.trim() || "Detailed summary of the video content",
-      tags: tags.slice(0, 5), // Limit to 5 tags
-    };
   }
 
   // Validate AI response structure
