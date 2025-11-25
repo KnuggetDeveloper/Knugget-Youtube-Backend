@@ -203,7 +203,7 @@ export class SummaryService {
           },
         });
       } else {
-        // Create new summary - this is when we increment video count
+        // Create new summary
         if (
           !summaryData.videoId ||
           !summaryData.videoTitle ||
@@ -212,45 +212,7 @@ export class SummaryService {
           throw new AppError("Missing required video metadata", 400);
         }
 
-        // Check if user has video quota remaining
-        const user = await prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            plan: true,
-            videosProcessedThisMonth: true,
-          },
-        });
-
-        if (!user) {
-          throw new AppError("User not found", 404);
-        }
-
-        // Get video limit based on plan
-        let videoLimit: number;
-        switch (user.plan) {
-          case "FREE":
-            videoLimit = config.videoLimits.free;
-            break;
-          case "LITE":
-            videoLimit = config.videoLimits.lite;
-            break;
-          case "PRO":
-            videoLimit = config.videoLimits.pro;
-            break;
-          default:
-            videoLimit = config.videoLimits.free;
-        }
-
-        if (user.videosProcessedThisMonth >= videoLimit) {
-          throw new AppError(
-            `Video limit reached. You have processed ${user.videosProcessedThisMonth}/${videoLimit} videos this month.`,
-            402
-          );
-        }
-
-        shouldIncrementVideo = true;
-
-        // Check if summary already exists for this video
+        // Check if summary already exists for this video FIRST
         const existingSummary = await prisma.summary.findFirst({
           where: {
             userId,
@@ -260,12 +222,57 @@ export class SummaryService {
         });
 
         if (existingSummary) {
-          // Return existing summary without deducting credits
+          // Return existing summary without any checks
           return {
             success: true,
             data: this.formatSummary(existingSummary),
           };
         }
+
+        // Determine if this is from extension generation (video count already incremented)
+        // The extension passes isUnsaved: true, meaning the video count was already incremented during generation
+        const isFromExtensionGeneration = summaryData.isUnsaved === true;
+
+        if (!isFromExtensionGeneration) {
+          // Direct save (not from extension) - check limits and increment count
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+              plan: true,
+              videosProcessedThisMonth: true,
+            },
+          });
+
+          if (!user) {
+            throw new AppError("User not found", 404);
+          }
+
+          // Get video limit based on plan
+          let videoLimit: number;
+          switch (user.plan) {
+            case "FREE":
+              videoLimit = config.videoLimits.free;
+              break;
+            case "LITE":
+              videoLimit = config.videoLimits.lite;
+              break;
+            case "PRO":
+              videoLimit = config.videoLimits.pro;
+              break;
+            default:
+              videoLimit = config.videoLimits.free;
+          }
+
+          if (user.videosProcessedThisMonth >= videoLimit) {
+            throw new AppError(
+              `Video limit reached. You have processed ${user.videosProcessedThisMonth}/${videoLimit} videos this month.`,
+              402
+            );
+          }
+
+          shouldIncrementVideo = true;
+        }
+        // If isFromExtensionGeneration = true, skip limit check because count was already incremented
 
         summary = await prisma.summary.create({
           data: {

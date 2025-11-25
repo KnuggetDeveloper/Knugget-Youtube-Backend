@@ -208,10 +208,7 @@ export type CreateUserData = Omit<User, "id" | "createdAt" | "updatedAt"> & {
   firebaseUid: string;
 };
 export type UpdateUserData = Partial<
-  Pick<
-    User,
-    "name" | "avatar" | "plan" | "emailVerified" | "lastLoginAt"
-  >
+  Pick<User, "name" | "avatar" | "plan" | "emailVerified" | "lastLoginAt">
 >;
 
 export type CreateSummaryData = {
@@ -229,6 +226,7 @@ export type CreateSummaryData = {
   transcriptText?: string;
   userId: string;
   status?: SummaryStatus;
+  isUnsaved?: boolean; // Flag indicating if this was generated but not yet saved (extension use)
 };
 
 // Query Parameters
