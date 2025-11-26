@@ -5,6 +5,7 @@ import { logger } from "../config/logger";
 import { AppError } from "../middleware/errorHandler";
 import { openaiService } from "./openai";
 import { tokenService } from "./token";
+import { tokenUsageService } from "./tokenUsage";
 import {
   SummaryData,
   GenerateSummaryRequest,
@@ -294,6 +295,23 @@ export class SummaryService {
             userId,
           },
         });
+
+        // Mark token usage as saved in TOKEN_USAGE table
+        try {
+          await tokenUsageService.markAsSaved(
+            userId,
+            summaryData.videoId,
+            summary.id
+          );
+        } catch (tokenUsageError) {
+          logger.warn("Failed to mark token usage as saved", {
+            tokenUsageError,
+            userId,
+            videoId: summaryData.videoId,
+            summaryId: summary.id,
+          });
+          // Don't throw - this shouldn't block the save operation
+        }
 
         // Video count already incremented during generation, don't increment again
       }

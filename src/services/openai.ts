@@ -11,6 +11,7 @@ import {
   MAX_TRANSCRIPT_LENGTH,
 } from "../types";
 import { tokenService } from "./token";
+import { tokenUsageService } from "./tokenUsage";
 
 interface OpenAICompletionRequest {
   messages: Array<{
@@ -234,7 +235,7 @@ ${transcriptText}`,
           // Consume tokens for all users (FREE, LITE, PRO)
           const user = await prisma.user.findUnique({
             where: { id: userId },
-            select: { plan: true },
+            select: { plan: true, email: true },
           });
 
           if (user) {
@@ -248,6 +249,28 @@ ${transcriptText}`,
                 tokenError,
                 userId,
                 usage: responseData.usage,
+              });
+            }
+
+            // Track token usage in the new TOKEN_USAGE table
+            try {
+              await tokenUsageService.trackTokenUsage({
+                userId,
+                userEmail: user.email,
+                videoId: videoMetadata.videoId,
+                videoUrl:
+                  videoMetadata.url ||
+                  `https://www.youtube.com/watch?v=${videoMetadata.videoId}`,
+                videoTitle: videoMetadata.title,
+                inputTokens: responseData.usage.prompt_tokens,
+                outputTokens: responseData.usage.completion_tokens,
+                model: "gpt-5-nano",
+                status: "success",
+              });
+            } catch (tokenUsageError) {
+              logger.warn("Failed to track token usage in TOKEN_USAGE table", {
+                tokenUsageError,
+                userId,
               });
             }
           }
@@ -287,6 +310,39 @@ ${transcriptText}`,
         videoId: videoMetadata.videoId,
         transcriptLength: transcript.length,
       });
+
+      // Track failed attempts in TOKEN_USAGE table
+      if (userId) {
+        try {
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { email: true },
+          });
+
+          if (user) {
+            await tokenUsageService.trackTokenUsage({
+              userId,
+              userEmail: user.email,
+              videoId: videoMetadata.videoId,
+              videoUrl:
+                videoMetadata.url ||
+                `https://www.youtube.com/watch?v=${videoMetadata.videoId}`,
+              videoTitle: videoMetadata.title,
+              inputTokens: 0,
+              outputTokens: 0,
+              model: "gpt-5-nano",
+              status: "failed",
+              errorMessage:
+                error instanceof Error ? error.message : "Unknown error",
+            });
+          }
+        } catch (tokenUsageError) {
+          logger.warn("Failed to track failed token usage", {
+            tokenUsageError,
+            userId,
+          });
+        }
+      }
 
       if (error instanceof AppError) {
         throw error;
@@ -523,7 +579,7 @@ Now synthesize all parts into a comprehensive final summary in JSON format.
           // Consume tokens for all users (FREE, LITE, PRO)
           const user = await prisma.user.findUnique({
             where: { id: userId },
-            select: { plan: true },
+            select: { plan: true, email: true },
           });
 
           if (user) {
@@ -538,6 +594,31 @@ Now synthesize all parts into a comprehensive final summary in JSON format.
                 userId,
                 usage: finalResponseData.usage,
               });
+            }
+
+            // Track token usage in the new TOKEN_USAGE table
+            try {
+              await tokenUsageService.trackTokenUsage({
+                userId,
+                userEmail: user.email,
+                videoId: videoMetadata.videoId,
+                videoUrl:
+                  videoMetadata.url ||
+                  `https://www.youtube.com/watch?v=${videoMetadata.videoId}`,
+                videoTitle: videoMetadata.title,
+                inputTokens: finalResponseData.usage.prompt_tokens,
+                outputTokens: finalResponseData.usage.completion_tokens,
+                model: "gpt-5-nano",
+                status: "success",
+              });
+            } catch (tokenUsageError) {
+              logger.warn(
+                "Failed to track token usage in TOKEN_USAGE table for chunked summary",
+                {
+                  tokenUsageError,
+                  userId,
+                }
+              );
             }
           }
         } catch (trackingError) {
@@ -582,6 +663,40 @@ Now synthesize all parts into a comprehensive final summary in JSON format.
         error,
         videoId: videoMetadata.videoId,
       });
+
+      // Track failed attempts in TOKEN_USAGE table
+      if (userId) {
+        try {
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { email: true },
+          });
+
+          if (user) {
+            await tokenUsageService.trackTokenUsage({
+              userId,
+              userEmail: user.email,
+              videoId: videoMetadata.videoId,
+              videoUrl:
+                videoMetadata.url ||
+                `https://www.youtube.com/watch?v=${videoMetadata.videoId}`,
+              videoTitle: videoMetadata.title,
+              inputTokens: 0,
+              outputTokens: 0,
+              model: "gpt-5-nano",
+              status: "failed",
+              errorMessage:
+                error instanceof Error ? error.message : "Unknown error",
+            });
+          }
+        } catch (tokenUsageError) {
+          logger.warn("Failed to track failed chunked token usage", {
+            tokenUsageError,
+            userId,
+          });
+        }
+      }
+
       throw error instanceof AppError
         ? error
         : new AppError("Summary generation failed", 500);

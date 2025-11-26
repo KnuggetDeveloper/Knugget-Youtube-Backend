@@ -57,6 +57,7 @@ model User {
   summaries     Summary[]
   refreshTokens RefreshToken[]
   openaiUsage   OpenAIUsage[]
+  tokenUsage    TokenUsage[]
 
   @@map("users")
 }
@@ -168,4 +169,48 @@ model OpenAIUsage {
   @@index([createdAt])
   @@index([operation])
   @@map("openai_usage")
+}
+
+model TokenUsage {
+  id String @id @default(cuid())
+
+  // User information
+  userId    String
+  userEmail String // Store email directly for easy access
+
+  // Video information
+  videoId    String
+  videoUrl   String
+  videoTitle String?
+
+  // Token consumption
+  inputTokens  Int
+  outputTokens Int
+  totalTokens  Int
+
+  // Summary tracking
+  summaryId String? // Link to summary if it was saved
+  isSaved   Boolean @default(false) // Track if summary was saved
+
+  // Model and operation details
+  model     String @default("gpt-5-nano")
+  operation String @default("summary_generation")
+
+  // Status
+  status       String  @default("success") // 'success', 'failed', 'partial'
+  errorMessage String? // Store error if failed
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes for performance and analytics
+  @@index([userId])
+  @@index([videoId])
+  @@index([userEmail])
+  @@index([createdAt])
+  @@index([isSaved])
+  @@map("token_usage")
 }
