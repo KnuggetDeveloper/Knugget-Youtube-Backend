@@ -261,7 +261,7 @@ export interface ServiceResponse<T = any> {
 }
 
 // Constants
-export const MAX_TRANSCRIPT_LENGTH = 50000; // chars
+export const MAX_TRANSCRIPT_LENGTH = 1000000; // chars
 export const MAX_SUMMARY_HISTORY = 100; // per user
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;

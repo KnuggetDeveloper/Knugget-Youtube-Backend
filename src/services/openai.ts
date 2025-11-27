@@ -443,7 +443,7 @@ ${chunkText}`,
               // Consume tokens for all users (FREE, LITE, PRO)
               const user = await prisma.user.findUnique({
                 where: { id: userId },
-                select: { plan: true },
+                select: { plan: true, email: true },
               });
 
               if (user) {
@@ -458,6 +458,32 @@ ${chunkText}`,
                     userId,
                     usage: responseData.usage,
                   });
+                }
+
+                // Track token usage for this chunk in the TOKEN_USAGE table
+                try {
+                  await tokenUsageService.trackTokenUsage({
+                    userId,
+                    userEmail: user.email,
+                    videoId: videoMetadata.videoId,
+                    videoUrl:
+                      videoMetadata.url ||
+                      `https://www.youtube.com/watch?v=${videoMetadata.videoId}`,
+                    videoTitle: videoMetadata.title,
+                    inputTokens: responseData.usage.prompt_tokens,
+                    outputTokens: responseData.usage.completion_tokens,
+                    model: "gpt-5-nano",
+                    status: "success",
+                  });
+                } catch (tokenUsageError) {
+                  logger.warn(
+                    "Failed to track token usage in TOKEN_USAGE table for chunk",
+                    {
+                      tokenUsageError,
+                      userId,
+                      chunkIndex: i + 1,
+                    }
+                  );
                 }
               }
             } catch (trackingError) {
