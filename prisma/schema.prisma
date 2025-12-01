@@ -225,6 +225,11 @@ model ImageGenerationUsage {
   // User information
   userId    String
   userEmail String // Store email directly for easy access
+  
+  // Token usage (like summary tracking)
+  inputTokens  Int @default(0) // Prompt tokens (transcript + instructions)
+  outputTokens Int @default(0) // Image generation tokens
+  totalTokens  Int @default(0) // Total tokens used
 
   // Video information
   videoId    String
@@ -240,10 +245,6 @@ model ImageGenerationUsage {
   numberOfImages Int     @default(1) // Number of images generated
   imageUrl       String? // URL where the image is stored
 
-  // Token usage (like summary tracking)
-  inputTokens  Int @default(0) // Prompt tokens (transcript + instructions)
-  outputTokens Int @default(0) // Image generation tokens
-  totalTokens  Int @default(0) // Total tokens used
 
   // Status
   status       String  @default("success") // 'success', 'failed', 'partial'
