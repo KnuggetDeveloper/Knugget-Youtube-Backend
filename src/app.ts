@@ -194,8 +194,12 @@ const startServer = async () => {
       console.log("├── /api/summary/*");
       console.log("├── /api/user/*");
       console.log("├── /api/payment/*");
+      console.log("├── /api/infographic/*");
       // console.log('└── /api/linkedin/*'); // This should appear!
     });
+
+    // Disable server timeout for long-running operations like image generation
+    server.setTimeout(0); // 0 = no timeout
 
     server.on("error", (error: NodeJS.ErrnoException) => {
       if (error.syscall !== "listen") {
