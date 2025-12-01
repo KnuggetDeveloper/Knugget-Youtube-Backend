@@ -71,7 +71,7 @@ export class InfographicController {
         res.status(500).json(response);
       }
     },
-    Infinity // No timeout - allow unlimited time for image generation
+    2147483647 // Maximum safe timeout (~24.8 days) - effectively no timeout
   );
 
   // Get image generation statistics
