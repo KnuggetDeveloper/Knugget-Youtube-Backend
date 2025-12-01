@@ -102,12 +102,13 @@ export class InfographicService {
         promptLength: prompt.length,
       });
 
-      // Generate image using Gemini Native Image Generation
+      // Generate image using Gemini 3 Pro Image (Nano Banana Pro)
+      // State-of-the-art image generation with thinking mode
       const response = await this.ai.models.generateContent({
         model: "gemini-3-pro-image-preview",
         contents: prompt,
         config: {
-          responseModalities: ["IMAGE"],
+          responseModalities: ["TEXT", "IMAGE"], // BOTH required for this model
           imageConfig: {
             aspectRatio: "16:9",
             imageSize: "2K",
@@ -135,11 +136,20 @@ export class InfographicService {
           hasInlineData: !!p.inlineData,
           mimeType: p.inlineData?.mimeType,
           hasData: !!p.inlineData?.data,
+          isThought: !!p.thought,
         })),
       });
 
+      // Extract image data from the response
+      // Skip "thought" parts - only get final image from non-thought parts
+      // Gemini 3 Pro uses thinking mode and generates interim thought images
       let imageData: string | null = null;
       for (const part of candidate.content.parts) {
+        // Skip thought parts (thinking mode generates interim images we don't want)
+        if (part.thought) {
+          continue;
+        }
+
         if (
           part.inlineData?.mimeType?.includes("image") &&
           part.inlineData?.data
