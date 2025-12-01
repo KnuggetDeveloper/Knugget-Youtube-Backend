@@ -70,8 +70,8 @@ export class InfographicController {
 
         res.status(500).json(response);
       }
-    },
-    120000 // 2 minutes timeout for image generation
+    }
+    // No timeout - allow as much time as needed for image generation
   );
 
   // Get image generation statistics

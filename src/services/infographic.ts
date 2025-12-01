@@ -76,7 +76,7 @@ export class InfographicService {
         };
       }
 
-      // Get transcript text
+      // Get full transcript text
       const transcriptText =
         data.transcriptText || summary.transcriptText || "";
 
@@ -84,21 +84,11 @@ export class InfographicService {
         throw new AppError("Transcript not available for this video", 400);
       }
 
-      // Limit transcript to reasonable length (Gemini has token limits)
-      // Using ~10,000 characters (roughly 2,500 tokens) to stay well under limits
-      // const maxTranscriptLength = 10000;
-      // const truncatedTranscript =
-      //   transcriptText.length > maxTranscriptLength
-      //     ? transcriptText.substring(0, maxTranscriptLength) + "..."
-      //     : transcriptText;
-
-      // logger.info("Transcript length", {
-      //   userId,
-      //   summaryId: data.summaryId,
-      //   originalLength: transcriptText.length,
-      //   truncatedLength: truncatedTranscript.length,
-      //   wasTruncated: transcriptText.length > maxTranscriptLength,
-      // });
+      logger.info("Using full transcript for infographic", {
+        userId,
+        summaryId: data.summaryId,
+        transcriptLength: transcriptText.length,
+      });
 
       // Create prompt for infographic generation
       const prompt = this.createInfographicPrompt(
