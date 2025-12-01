@@ -97,23 +97,45 @@ export class InfographicService {
         promptLength: prompt.length,
       });
 
-      // Generate image using Google AI
-      const response = await this.ai.models.generateImages({
+      // Generate image using Gemini Native Image Generation
+      const response = await this.ai.models.generateContent({
         model: "gemini-3-pro-image-preview",
-        prompt: prompt,
+        contents: prompt,
         config: {
-          numberOfImages: 1,
+          responseModalities: ["IMAGE", "TEXT"],
+          imageConfig: {
+            aspectRatio: "16:9",
+            imageSize: "2K",
+          },
         },
       });
 
-      if (!response.generatedImages || response.generatedImages.length === 0) {
+      // Extract image from response parts
+      if (!response.candidates || response.candidates.length === 0) {
         throw new AppError("Failed to generate infographic", 500);
       }
 
-      // Save the generated image
-      const generatedImage = response.generatedImages[0];
-      const imgBytes = generatedImage.image?.imageBytes;
-      const buffer = Buffer.from(imgBytes || "", "base64");
+      const candidate = response.candidates[0];
+      if (!candidate?.content?.parts) {
+        throw new AppError("No content in response", 500);
+      }
+
+      let imageData: string | null = null;
+      for (const part of candidate.content.parts) {
+        if (
+          part.inlineData?.mimeType?.includes("image") &&
+          part.inlineData?.data
+        ) {
+          imageData = part.inlineData.data;
+          break;
+        }
+      }
+
+      if (!imageData) {
+        throw new AppError("No image data in response", 500);
+      }
+
+      const buffer = Buffer.from(imageData, "base64");
 
       // Generate unique filename
       const filename = `infographic-${summary.id}-${Date.now()}.png`;
