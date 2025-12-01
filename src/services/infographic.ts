@@ -172,32 +172,37 @@ export class InfographicService {
         throw new AppError("No image data in response", 500);
       }
 
-      const buffer = Buffer.from(imageData, "base64");
+      // Store as data URL - NO FILE STORAGE NEEDED!
+      // This saves disk space and eliminates file management issues
+      const dataUrl = `data:image/png;base64,${imageData}`;
 
-      // Generate unique filename
-      const filename = `infographic-${summary.id}-${Date.now()}.png`;
-      const filepath = path.join(this.uploadsDir, filename);
-
-      // Write file to disk
-      fs.writeFileSync(filepath, buffer);
-
-      // Create URL path (relative to the API)
-      const imageUrl = `/uploads/infographics/${filename}`;
-
-      logger.info("Infographic saved to disk", {
+      logger.info("Infographic generated as data URL (no disk storage)", {
         userId,
         summaryId: data.summaryId,
-        filepath,
-        imageUrl,
+        dataUrlLength: dataUrl.length,
       });
 
-      // Update summary with infographic URL
+      // Extract token usage from response
+      const inputTokens = response.usageMetadata?.promptTokenCount || 0;
+      const outputTokens = response.usageMetadata?.candidatesTokenCount || 0;
+      const totalTokens =
+        response.usageMetadata?.totalTokenCount || inputTokens + outputTokens;
+
+      logger.info("Token usage for infographic generation", {
+        userId,
+        summaryId: data.summaryId,
+        inputTokens,
+        outputTokens,
+        totalTokens,
+      });
+
+      // Update summary with infographic data URL
       await prisma.summary.update({
         where: { id: summary.id },
-        data: { infographicUrl: imageUrl },
+        data: { infographicUrl: dataUrl }, // Store data URL directly in DB
       });
 
-      // Track image generation usage
+      // Track image generation usage with token counts
       await this.trackImageGenerationUsage({
         userId,
         userEmail: "", // Will be fetched from user
@@ -205,21 +210,24 @@ export class InfographicService {
         videoUrl: summary.videoUrl,
         videoTitle: summary.videoTitle,
         summaryId: summary.id,
-        imageUrl: imageUrl,
+        imageUrl: "data_url_stored", // Don't store full base64 in usage table
         numberOfImages: 1,
+        inputTokens,
+        outputTokens,
+        totalTokens,
         status: "success",
       });
 
-      logger.info("Infographic generated successfully", {
+      logger.info("Infographic generated successfully (data URL)", {
         userId,
         summaryId: data.summaryId,
-        imageUrl,
+        totalTokens,
       });
 
       return {
         success: true,
         data: {
-          imageUrl,
+          imageUrl: dataUrl, // Return data URL
           summaryId: summary.id,
         },
       };
@@ -241,6 +249,9 @@ export class InfographicService {
           summaryId: data.summaryId,
           imageUrl: null,
           numberOfImages: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
           status: "failed",
           errorMessage:
             error instanceof Error ? error.message : "Unknown error",
@@ -281,6 +292,9 @@ export class InfographicService {
     summaryId: string;
     imageUrl: string | null;
     numberOfImages: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
     status: string;
     errorMessage?: string;
   }): Promise<void> {
@@ -305,6 +319,9 @@ export class InfographicService {
           summaryId: data.summaryId,
           imageUrl: data.imageUrl,
           numberOfImages: data.numberOfImages,
+          inputTokens: data.inputTokens || 0,
+          outputTokens: data.outputTokens || 0,
+          totalTokens: data.totalTokens || 0,
           status: data.status,
           errorMessage: data.errorMessage,
           model: "gemini-3-pro-image-preview",
