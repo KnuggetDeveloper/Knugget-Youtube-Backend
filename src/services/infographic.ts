@@ -280,7 +280,7 @@ export class InfographicService {
     transcript: string,
     videoTitle: string
   ): string {
-    return `Take the following transcript and generate a detailed infographic.
+    return `Generate Image :- Take the following transcript and generate a detailed infographic image.
     Video Title: ${videoTitle}
     Transcript:
     ${transcript}
