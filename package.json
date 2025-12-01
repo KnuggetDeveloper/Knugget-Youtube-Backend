@@ -28,6 +28,7 @@
   "author": "Knugget AI",
   "license": "MIT",
   "dependencies": {
+    "@google/genai": "^1.30.0",
     "@prisma/client": "^6.9.0",
     "cors": "^2.8.5",
     "dodopayments": "^2.0.2",

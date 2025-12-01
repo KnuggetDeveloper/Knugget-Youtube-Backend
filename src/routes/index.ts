@@ -11,6 +11,7 @@ import summaryRoutes from "./summary";
 import userRoutes from "./user";
 import paymentRoutes from "./payment";
 import tokenRoutes from "./token";
+import infographicRoutes from "./infographic";
 // LinkedIn and Website routes - conditionally imported based on feature flags
 // import linkedinRoutes from "./linkedin";
 // import websiteSummaryRoutes from "./website";
@@ -73,6 +74,7 @@ router.get("/", (req, res) => {
         user: "/api/user",
         payment: "/api/payment",
         token: "/api/token",
+        infographic: "/api/infographic",
         // LinkedIn and Website endpoints disabled - can be re-enabled via feature flags
         // linkedin: "/api/linkedin",
         // website: "/api/website",
@@ -91,6 +93,7 @@ router.use("/summary", summaryRoutes);
 router.use("/user", userRoutes);
 router.use("/payment", paymentRoutes);
 router.use("/token", tokenRoutes);
+router.use("/infographic", infographicRoutes);
 
 // LinkedIn and Website routes conditionally mounted based on feature flags
 // if (config.features.linkedin) {

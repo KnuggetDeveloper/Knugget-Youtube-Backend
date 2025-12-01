@@ -54,10 +54,11 @@ model User {
   // Email verification
   emailVerified Boolean @default(false)
 
-  summaries     Summary[]
-  refreshTokens RefreshToken[]
-  openaiUsage   OpenAIUsage[]
-  tokenUsage    TokenUsage[]
+  summaries              Summary[]
+  refreshTokens          RefreshToken[]
+  openaiUsage            OpenAIUsage[]
+  tokenUsage             TokenUsage[]
+  imageGenerationUsage   ImageGenerationUsage[]
 
   @@map("users")
 }
@@ -95,6 +96,9 @@ model Summary {
   // Transcript data
   transcript     Json? // Store original transcript segments
   transcriptText String? // Flattened transcript for AI processing
+
+  // Infographic data
+  infographicUrl String? // URL of the generated infographic image
 
   // User relation
   userId String
@@ -213,4 +217,44 @@ model TokenUsage {
   @@index([createdAt])
   @@index([isSaved])
   @@map("token_usage")
+}
+
+model ImageGenerationUsage {
+  id String @id @default(cuid())
+
+  // User information
+  userId    String
+  userEmail String // Store email directly for easy access
+
+  // Video information
+  videoId    String
+  videoUrl   String
+  videoTitle String?
+
+  // Summary tracking
+  summaryId String? // Link to summary if it was saved
+
+  // Image generation details
+  model          String  @default("gemini-3-pro-image-preview")
+  operation      String  @default("infographic_generation")
+  numberOfImages Int     @default(1) // Number of images generated
+  imageUrl       String? // URL where the image is stored
+
+  // Status
+  status       String  @default("success") // 'success', 'failed', 'partial'
+  errorMessage String? // Store error if failed
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes for performance and analytics
+  @@index([userId])
+  @@index([videoId])
+  @@index([userEmail])
+  @@index([createdAt])
+  @@index([summaryId])
+  @@map("image_generation_usage")
 }
