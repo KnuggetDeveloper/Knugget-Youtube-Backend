@@ -172,14 +172,20 @@ export class InfographicService {
         throw new AppError("No image data in response", 500);
       }
 
-      // Store as data URL - NO FILE STORAGE NEEDED!
-      // This saves disk space and eliminates file management issues
-      const dataUrl = `data:image/png;base64,${imageData}`;
+      // Save image as file in uploads/infographics directory
+      const filename = `infographic-${summary.id}.png`;
+      const filepath = path.join(this.uploadsDir, filename);
+      const imageUrl = `/uploads/infographics/${filename}`;
 
-      logger.info("Infographic generated as data URL (no disk storage)", {
+      // Decode base64 and write to file
+      const buffer = Buffer.from(imageData, "base64");
+      fs.writeFileSync(filepath, buffer);
+
+      logger.info("Infographic saved to file", {
         userId,
         summaryId: data.summaryId,
-        dataUrlLength: dataUrl.length,
+        filepath,
+        fileSize: buffer.length,
       });
 
       // Extract token usage from response
@@ -196,10 +202,10 @@ export class InfographicService {
         totalTokens,
       });
 
-      // Update summary with infographic data URL
+      // Update summary with infographic file path
       await prisma.summary.update({
         where: { id: summary.id },
-        data: { infographicUrl: dataUrl }, // Store data URL directly in DB
+        data: { infographicUrl: imageUrl }, // Store file path
       });
 
       // Track image generation usage with token counts
@@ -210,7 +216,7 @@ export class InfographicService {
         videoUrl: summary.videoUrl,
         videoTitle: summary.videoTitle,
         summaryId: summary.id,
-        imageUrl: "data_url_stored", // Don't store full base64 in usage table
+        imageUrl: imageUrl, // Store file path
         numberOfImages: 1,
         inputTokens,
         outputTokens,
@@ -218,16 +224,17 @@ export class InfographicService {
         status: "success",
       });
 
-      logger.info("Infographic generated successfully (data URL)", {
+      logger.info("Infographic generated successfully", {
         userId,
         summaryId: data.summaryId,
+        imageUrl,
         totalTokens,
       });
 
       return {
         success: true,
         data: {
-          imageUrl: dataUrl, // Return data URL
+          imageUrl: imageUrl, // Return file path
           summaryId: summary.id,
         },
       };
