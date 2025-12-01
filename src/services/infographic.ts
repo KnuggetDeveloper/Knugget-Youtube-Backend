@@ -84,7 +84,22 @@ export class InfographicService {
         throw new AppError("Transcript not available for this video", 400);
       }
 
-      // Use full transcript for infographic generation
+      // Limit transcript to reasonable length (Gemini has token limits)
+      // Using ~10,000 characters (roughly 2,500 tokens) to stay well under limits
+      // const maxTranscriptLength = 10000;
+      // const truncatedTranscript =
+      //   transcriptText.length > maxTranscriptLength
+      //     ? transcriptText.substring(0, maxTranscriptLength) + "..."
+      //     : transcriptText;
+
+      // logger.info("Transcript length", {
+      //   userId,
+      //   summaryId: data.summaryId,
+      //   originalLength: transcriptText.length,
+      //   truncatedLength: truncatedTranscript.length,
+      //   wasTruncated: transcriptText.length > maxTranscriptLength,
+      // });
+
       // Create prompt for infographic generation
       const prompt = this.createInfographicPrompt(
         transcriptText,
@@ -102,7 +117,7 @@ export class InfographicService {
         model: "gemini-3-pro-image-preview",
         contents: prompt,
         config: {
-          responseModalities: ["IMAGE", "TEXT"],
+          responseModalities: ["IMAGE"],
           imageConfig: {
             aspectRatio: "16:9",
             imageSize: "2K",
@@ -120,6 +135,19 @@ export class InfographicService {
         throw new AppError("No content in response", 500);
       }
 
+      // Debug: Log the response structure
+      logger.info("Response parts received", {
+        userId,
+        summaryId: data.summaryId,
+        partsCount: candidate.content.parts.length,
+        partsTypes: candidate.content.parts.map((p: any) => ({
+          hasText: !!p.text,
+          hasInlineData: !!p.inlineData,
+          mimeType: p.inlineData?.mimeType,
+          hasData: !!p.inlineData?.data,
+        })),
+      });
+
       let imageData: string | null = null;
       for (const part of candidate.content.parts) {
         if (
@@ -132,6 +160,15 @@ export class InfographicService {
       }
 
       if (!imageData) {
+        // Log full response for debugging
+        logger.error("No image found in response", {
+          userId,
+          summaryId: data.summaryId,
+          responseStructure: JSON.stringify(response, null, 2).substring(
+            0,
+            1000
+          ),
+        });
         throw new AppError("No image data in response", 500);
       }
 
