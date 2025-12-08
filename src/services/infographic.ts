@@ -200,6 +200,7 @@ export class InfographicService {
         inputTokens,
         outputTokens,
         totalTokens,
+        response: response,
       });
 
       // Update summary with infographic file path
