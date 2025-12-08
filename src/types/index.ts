@@ -393,3 +393,125 @@ export {
   RefreshToken,
   VideoMetadata as PrismaVideoMetadata,
 } from "@prisma/client";
+
+// LinkedIn Types
+export interface LinkedinPostData {
+  id: string;
+  title?: string | null;
+  content: string;
+  author: string;
+  postUrl: string;
+  linkedinPostId?: string | null;
+  platform: string;
+  engagement?: {
+    likes?: number;
+    comments?: number;
+    shares?: number;
+  } | null;
+  metadata?: {
+    timestamp?: string;
+    source?: string;
+    authorAbout?: string;
+    authorImage?: string;
+    [key: string]: any;
+  } | null;
+  savedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SaveLinkedinPostDto {
+  title?: string;
+  content: string;
+  author: string;
+  postUrl: string;
+  linkedinPostId?: string;
+  platform?: string;
+  engagement?: {
+    likes?: number;
+    comments?: number;
+    shares?: number;
+  };
+  metadata?: {
+    timestamp?: string;
+    source?: string;
+    authorAbout?: string;
+    authorImage?: string;
+    [key: string]: any;
+  };
+}
+
+export interface UpdateLinkedinPostDto {
+  title?: string;
+  content?: string;
+  author?: string;
+  engagement?: {
+    likes?: number;
+    comments?: number;
+    shares?: number;
+  };
+  metadata?: {
+    timestamp?: string;
+    source?: string;
+    [key: string]: any;
+  };
+}
+
+export interface LinkedinPostQueryParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  author?: string;
+  startDate?: string;
+  endDate?: string;
+  sortBy?: "savedAt" | "createdAt" | "author" | "title";
+  sortOrder?: "asc" | "desc";
+}
+
+export interface LinkedinPostStats {
+  totalPosts: number;
+  postsThisMonth: number;
+  postsThisWeek: number;
+  topAuthors: Array<{
+    author: string;
+    count: number;
+  }>;
+  recentActivity: Array<{
+    id: string;
+    title: string;
+    author: string;
+    savedAt: string;
+  }>;
+}
+
+// Website Summary Types
+export interface WebsiteSummaryData {
+  id: string;
+  title: string;
+  content: string;
+  summary: string;
+  url: string;
+  websiteName: string;
+  faviconUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateWebsiteSummaryDto {
+  title: string;
+  content: string;
+  url: string;
+}
+
+export interface WebsiteSummaryResponse {
+  id: string;
+  title: string;
+  content: string;
+  summary: string;
+  url: string;
+  websiteName: string;
+  faviconUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+  isNew: boolean; // Indicates if this was freshly created or retrieved from DB
+}

@@ -12,9 +12,8 @@ import userRoutes from "./user";
 import paymentRoutes from "./payment";
 import tokenRoutes from "./token";
 import infographicRoutes from "./infographic";
-// LinkedIn and Website routes - conditionally imported based on feature flags
-// import linkedinRoutes from "./linkedin";
-// import websiteSummaryRoutes from "./website";
+import linkedinRoutes from "./linkedin";
+import websiteRoutes from "./website";
 
 const router = Router();
 
@@ -75,9 +74,8 @@ router.get("/", (req, res) => {
         payment: "/api/payment",
         token: "/api/token",
         infographic: "/api/infographic",
-        // LinkedIn and Website endpoints disabled - can be re-enabled via feature flags
-        // linkedin: "/api/linkedin",
-        // website: "/api/website",
+        linkedin: "/api/linkedin",
+        website: "/api/website",
         health: "/api/health",
       },
       documentation: "https://docs.knugget.com/api",
@@ -94,15 +92,7 @@ router.use("/user", userRoutes);
 router.use("/payment", paymentRoutes);
 router.use("/token", tokenRoutes);
 router.use("/infographic", infographicRoutes);
-
-// LinkedIn and Website routes conditionally mounted based on feature flags
-// if (config.features.linkedin) {
-//   const linkedinRoutes = require("./linkedin").default;
-//   router.use("/linkedin", linkedinRoutes);
-// }
-// if (config.features.website) {
-//   const websiteSummaryRoutes = require("./website").default;
-//   router.use("/website", websiteSummaryRoutes);
-// }
+router.use("/linkedin", linkedinRoutes);
+router.use("/website", websiteRoutes);
 
 export default router;
