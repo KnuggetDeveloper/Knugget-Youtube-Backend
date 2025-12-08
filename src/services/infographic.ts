@@ -229,8 +229,8 @@ export class InfographicService {
         summaryId: data.summaryId,
         imageUrl,
         totalTokens,
-      });
-
+        usageMetadata: response.usageMetadata,
+      }); 
       return {
         success: true,
         data: {
