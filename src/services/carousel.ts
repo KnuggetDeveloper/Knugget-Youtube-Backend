@@ -401,7 +401,7 @@ export class CarouselService {
   ): Promise<
     Array<{ slideNumber: number; heading: string; explanation: string }>
   > {
-    const prompt = `Generate a very very detailed note of all the key points mentioned in this transcript. Do not exceed 15 key points. Therefore intelligently identify the most high value 15 key points from this transcript. Present it in the format "Slide [N] \n Heading: [Punchy action-oriented title] \n Explanation: [The detailed key note points corresponding to the heading from the transcript]", Transcript: ${transcript}
+    const prompt = `Generate a very very detailed note of all the key points mentioned in this transcript. The number of key points identified can be anywhere between 1 to 15 depending on the density of high value information. If there are only 2 key points in the content, then only 2 key points should be extracted. If there is only 8 key points in the content, then extract only those 8. Use your reasoning to appropriately identify the right amount of key points for any given content. Present it in the format "Slide [N] \n Heading: [Punchy action-oriented title] \n Explanation: [The detailed key note points corresponding to the heading from the transcript]", Transcript: ${transcript}
 `;
 
     const response = await this.ai.models.generateContent({
@@ -479,6 +479,10 @@ export class CarouselService {
           explanation = match[1].trim();
           // Remove trailing newlines and clean up
           explanation = explanation.replace(/\n\s*\n\s*Slide.*$/is, "").trim();
+
+          // Remove markdown bolding (**) and other common markdown artifacts
+          explanation = explanation.replace(/\*\*/g, "").replace(/__/g, "");
+
           if (explanation) break;
         }
       }
@@ -544,7 +548,7 @@ export class CarouselService {
 
     if (slideNumber === 1 || !styleReferenceImageUrl) {
       // First slide - no style reference
-      prompt = `Generate an infographic for a YouTube Podcast with the title ${videoTitle} from ${channelName}. This is the content for the slide ${heading} + ${explanation}.`;
+      prompt = `This is the content for the slide ${heading} + ${explanation}.`;
 
       contents = prompt;
     } else {
@@ -558,7 +562,7 @@ export class CarouselService {
         const imageData = fs.readFileSync(styleImagePath);
         const base64Image = imageData.toString("base64");
 
-        prompt = `Generate an infographic for a YouTube Podcast with the title ${videoTitle} from ${channelName}. This is the content for the slide ${heading} + ${explanation}. Follow the design style as per the image attached`;
+        prompt = `This is the content for the slide ${heading} + ${explanation}. Follow the design style as per the image attached`;
 
         contents = [
           { text: prompt },
@@ -571,7 +575,7 @@ export class CarouselService {
         ];
       } else {
         // Fallback if style reference image not found
-        prompt = `Generate an infographic for a YouTube Podcast with the title ${videoTitle} from ${channelName}. This is the content for the slide ${heading} + ${explanation}.`;
+        prompt = `This is the content for the slide ${heading} + ${explanation}.`;
 
         contents = prompt;
       }
