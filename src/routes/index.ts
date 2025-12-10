@@ -12,6 +12,7 @@ import userRoutes from "./user";
 import paymentRoutes from "./payment";
 import tokenRoutes from "./token";
 import infographicRoutes from "./infographic";
+import carouselRoutes from "./carousel";
 
 const router = Router();
 
@@ -72,6 +73,7 @@ router.get("/", (req, res) => {
         payment: "/api/payment",
         token: "/api/token",
         infographic: "/api/infographic",
+        carousel: "/api/carousel",
         health: "/api/health",
       },
       documentation: "https://docs.knugget.com/api",
@@ -88,5 +90,6 @@ router.use("/user", userRoutes);
 router.use("/payment", paymentRoutes);
 router.use("/token", tokenRoutes);
 router.use("/infographic", infographicRoutes);
+router.use("/carousel", carouselRoutes);
 
 export default router;

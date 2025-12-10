@@ -59,6 +59,7 @@ model User {
   openaiUsage            OpenAIUsage[]
   tokenUsage             TokenUsage[]
   imageGenerationUsage   ImageGenerationUsage[]
+  carouselSlides         CarouselSlide[]
   @@map("users")
 }
 
@@ -262,5 +263,39 @@ model ImageGenerationUsage {
   @@index([createdAt])
   @@index([summaryId])
   @@map("image_generation_usage")
+}
+
+model CarouselSlide {
+  id        String @id @default(cuid())
+  summaryId String
+  userId    String
+
+  // Slide information
+  slideNumber Int     // 1-15
+  heading     String  // Action-oriented title
+  explanation String  // Detailed key note content
+  imageUrl    String? // Path to generated image
+
+  // Token usage for this slide
+  inputTokens  Int @default(0)
+  outputTokens Int @default(0)
+  totalTokens  Int @default(0)
+
+  // Status
+  status       String  @default("pending") // 'pending', 'generating', 'completed', 'failed'
+  errorMessage String?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@unique([summaryId, slideNumber])
+  @@index([summaryId])
+  @@index([userId])
+  @@map("carousel_slides")
 }
 
