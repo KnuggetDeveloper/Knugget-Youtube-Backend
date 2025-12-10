@@ -171,128 +171,35 @@ export class CarouselService {
         });
       }
 
-      // Step 3: Generate images for each slide
-      logger.info("Starting image generation for slides", {
+      // Step 3: Start image generation in BACKGROUND (non-blocking)
+      // This allows the frontend to poll for progress
+      logger.info("Starting image generation for slides in background", {
         userId,
         summaryId: data.summaryId,
         slideCount: slides.length,
       });
 
-      let firstImageUrl: string | null = null;
-
-      for (let i = 0; i < slides.length; i++) {
-        const slide = slides[i];
-
-        try {
-          // Update status to generating
-          await prisma.carouselSlide.update({
-            where: {
-              summaryId_slideNumber: {
-                summaryId: data.summaryId,
-                slideNumber: slide.slideNumber,
-              },
-            },
-            data: { status: "generating" },
-          });
-
-          // Generate image
-          const imageResult = await this.generateSlideImage(
-            summary.videoTitle,
-            summary.channelName,
-            slide.slideNumber,
-            slides.length,
-            slide.heading,
-            slide.explanation,
-            data.summaryId,
-            firstImageUrl // Pass first image for style reference
-          );
-
-          // Store first image URL for subsequent slides
-          if (i === 0 && imageResult.imageUrl) {
-            firstImageUrl = imageResult.imageUrl;
-          }
-
-          // Update slide with image URL
-          await prisma.carouselSlide.update({
-            where: {
-              summaryId_slideNumber: {
-                summaryId: data.summaryId,
-                slideNumber: slide.slideNumber,
-              },
-            },
-            data: {
-              imageUrl: imageResult.imageUrl,
-              inputTokens: imageResult.inputTokens,
-              outputTokens: imageResult.outputTokens,
-              totalTokens: imageResult.totalTokens,
-              status: "completed",
-            },
-          });
-
-          slides[i].imageUrl = imageResult.imageUrl;
-          slides[i].status = "completed";
-
-          logger.info("Slide image generated", {
-            userId,
-            summaryId: data.summaryId,
-            slideNumber: slide.slideNumber,
-            imageUrl: imageResult.imageUrl,
-          });
-        } catch (error) {
-          logger.error("Failed to generate image for slide", {
-            error: error instanceof Error ? error.message : "Unknown error",
-            slideNumber: slide.slideNumber,
-          });
-
-          // Mark slide as failed
-          await prisma.carouselSlide.update({
-            where: {
-              summaryId_slideNumber: {
-                summaryId: data.summaryId,
-                slideNumber: slide.slideNumber,
-              },
-            },
-            data: {
-              status: "failed",
-              errorMessage:
-                error instanceof Error ? error.message : "Unknown error",
-            },
-          });
-
-          slides[i].status = "failed";
-        }
-      }
-
-      // Track image generation usage
-      await this.trackCarouselUsage({
+      // Start background generation (don't await)
+      this.generateImagesInBackground(
         userId,
-        summaryId: data.summaryId,
-        videoId: summary.videoId,
-        videoUrl: summary.videoUrl,
-        videoTitle: summary.videoTitle,
-        numberOfImages: slides.filter((s) => s.status === "completed").length,
-        status: slides.every((s) => s.status === "completed")
-          ? "success"
-          : "partial",
-      });
+        data.summaryId,
+        summary.videoId,
+        summary.videoUrl,
+        summary.videoTitle,
+        summary.channelName,
+        slides
+      );
 
-      const completedSlides = slides.filter(
-        (s) => s.status === "completed"
-      ).length;
-
+      // Return immediately with "generating" status
+      // Frontend will poll getCarouselSlides to check progress
       return {
         success: true,
         data: {
           summaryId: summary.id,
           slides,
           totalSlides: slides.length,
-          completedSlides,
-          status:
-            completedSlides === slides.length
-              ? "completed"
-              : completedSlides > 0
-              ? "partial"
-              : "failed",
+          completedSlides: 0,
+          status: "generating",
         },
       };
     } catch (error) {
@@ -306,6 +213,125 @@ export class CarouselService {
         ? error
         : new AppError("Failed to generate carousel", 500);
     }
+  }
+
+  /**
+   * Generate images in background (non-blocking)
+   * This allows the API to return immediately while images generate
+   */
+  private async generateImagesInBackground(
+    userId: string,
+    summaryId: string,
+    videoId: string,
+    videoUrl: string,
+    videoTitle: string,
+    channelName: string,
+    slides: CarouselSlide[]
+  ): Promise<void> {
+    let firstImageUrl: string | null = null;
+
+    for (let i = 0; i < slides.length; i++) {
+      const slide = slides[i];
+
+      try {
+        // Update status to generating
+        await prisma.carouselSlide.update({
+          where: {
+            summaryId_slideNumber: {
+              summaryId: summaryId,
+              slideNumber: slide.slideNumber,
+            },
+          },
+          data: { status: "generating" },
+        });
+
+        // Generate image
+        const imageResult = await this.generateSlideImage(
+          videoTitle,
+          channelName,
+          slide.slideNumber,
+          slides.length,
+          slide.heading,
+          slide.explanation,
+          summaryId,
+          firstImageUrl // Pass first image for style reference
+        );
+
+        // Store first image URL for subsequent slides
+        if (i === 0 && imageResult.imageUrl) {
+          firstImageUrl = imageResult.imageUrl;
+        }
+
+        // Update slide with image URL
+        await prisma.carouselSlide.update({
+          where: {
+            summaryId_slideNumber: {
+              summaryId: summaryId,
+              slideNumber: slide.slideNumber,
+            },
+          },
+          data: {
+            imageUrl: imageResult.imageUrl,
+            inputTokens: imageResult.inputTokens,
+            outputTokens: imageResult.outputTokens,
+            totalTokens: imageResult.totalTokens,
+            status: "completed",
+          },
+        });
+
+        logger.info("Slide image generated", {
+          userId,
+          summaryId: summaryId,
+          slideNumber: slide.slideNumber,
+          imageUrl: imageResult.imageUrl,
+        });
+      } catch (error) {
+        logger.error("Failed to generate image for slide", {
+          error: error instanceof Error ? error.message : "Unknown error",
+          slideNumber: slide.slideNumber,
+        });
+
+        // Mark slide as failed
+        await prisma.carouselSlide.update({
+          where: {
+            summaryId_slideNumber: {
+              summaryId: summaryId,
+              slideNumber: slide.slideNumber,
+            },
+          },
+          data: {
+            status: "failed",
+            errorMessage:
+              error instanceof Error ? error.message : "Unknown error",
+          },
+        });
+      }
+    }
+
+    // Track image generation usage after all slides are processed
+    const completedCount = await prisma.carouselSlide.count({
+      where: {
+        summaryId: summaryId,
+        status: "completed",
+      },
+    });
+
+    await this.trackCarouselUsage({
+      userId,
+      summaryId: summaryId,
+      videoId: videoId,
+      videoUrl: videoUrl,
+      videoTitle: videoTitle,
+      numberOfImages: completedCount,
+      status: completedCount === slides.length ? "success" : "partial",
+    });
+
+    logger.info("Background carousel generation completed", {
+      userId,
+      summaryId,
+      totalSlides: slides.length,
+      completedSlides: completedCount,
+    });
   }
 
   /**
