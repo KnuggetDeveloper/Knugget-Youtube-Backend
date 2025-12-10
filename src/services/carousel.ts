@@ -402,94 +402,6 @@ export class CarouselService {
     Array<{ slideNumber: number; heading: string; explanation: string }>
   > {
     const prompt = `Generate a very very detailed note of all the key points mentioned in this transcript. Do not exceed 15 key points. Therefore intelligently identify the most high value 15 key points from this transcript. Present it in the format "Slide [N] \n Heading: [Punchy action-oriented title] \n Explanation: [The detailed key note points corresponding to the heading from the transcript]", Transcript: ${transcript}
-Sample Output :-
-Slide 1
-Heading: Embrace a 2030 Skill Shift to Stay Competitive
-
-Explanation: By 2030, the skills required for most jobs will change about 70%. To stay competitive, rethink from first principles and reimagine how building products happens, leveraging AI to reshape the workflow.
-
-
-Slide 2
-Heading: Introduce the Full Stack Builder Model
-
-Explanation: LinkedIn's approach enables any builder, regardless of role, to take an idea from concept to market. It's a fluid human-plus-AI interaction designed to shorten cycles and empower rapid end-to-end product development.
-
-
-Slide 3
-Heading: Move from Process-heavy to Craftsmanship-focused Dev Life Cycle
-
-Explanation: The traditional multi-step, highly siloed product development process creates bloated complexity. The full stack builder model collapses this stack, focusing on craftsmanship and end-to-end ownership.
-
-
-Slide 4
-Heading: Three Core Enablers: Platform, Tools, Culture
-
-Explanation: Rebuild the core platform for AI, develop specialized agents/tools, and cultivate a culture that incentivizes adoption and continuous improvement through leadership, norms, and recognition.
-
-
-Slide 5
-Heading: The Builder traits that Matter Most
-
-Explanation: Vision, empathy, communication, creativity, and most importantly judgment (high-quality decision-making in ambiguity) are the core traits builders should excel at; automation should handle the rest.
-
-
-Slide 6
-Heading: The Role of Pods and Smaller, Nimble Teams
-
-Explanation: Instead of large, bloated teams, LinkedIn uses cross-functional pods of full stack builders who tackle a problem for a quarter, then reconfigure, enabling velocity and sharpened focus.
-
-
-Slide 7
-Heading: The Magnitude of Change: Why automation and AI are Essential
-
-Explanation: Change is happening faster than response times. The skill and organizational shifts are needed to keep pace with the velocity of change and the demands of the market.
-
-
-Slide 8
-Heading: The Three-Component Rollout: Platform, Tools, Culture
-
-Explanation: Platform: rearchitect core to reason over AI with composable UI components; Tools: build and orchestrate AI agents (trust, growth, research, etc.); Culture: foster adoption through incentives, visibility, and leadership modeling.
-
-
-Slide 9
-Heading: Practical AI Agents: Custom, Not Off-the-Shelf
-
-Explanation: LinkedIn builds purpose-built agents (trust, growth, research, analyst, etc.) tailored to their data and context, plus an orchestrator layer to coordinate interactions between agents.
-
-
-Slide 10
-Heading: The Importance of Data Curation over Raw Access
-Explanation: Feeding AI with the right data is crucial. Simply granting broad data access led to poor results and hallucinations. Curate "gold" examples and define the knowledge base carefully.
-
-
-Slide 11
-Heading: Experimentation Scale: Velocity x Quality
-
-Explanation: Measure impact by the volume of experiments times the quality and speed from idea to launch. Early wins come from strong adoption by top performers who model success for others.
-
-
-Slide 12
-Heading: The Associate Full Stack Builder Program (APB)
-
-Explanation: Replacing the APM program, APB trains and places individuals across pods, teaching coding, design, and PM skills so they can contribute end-to-end in a modern LD environment.
-
-
-Slide 13
-Heading: Change Management as a Critical Lever
-
-Explanation: Adoption requires incentives, visible success stories, and a top-down-to-grassroots push. Culture, expectations, and performance processes must align with the new way of working.
-
-
-Slide 14
-Heading: What's Been Shown: Early Wins and Lessons
-
-Explanation: Early adopters deliver time savings and higher-quality outputs. Top performers gain the most benefit, signaling the need to expand adoption gradually and celebrate wins to build momentum.
-
-
-Slide 15
-Heading: The Future of Work at LinkedIn and Beyond
-
-Explanation: The model could redefine how companies operate, enabling agile, resilient, and fast-moving product teams. The key is continuous progress, not a fixed endpoint, with upfront investment in platform, tools, and culture.
 `;
 
     const response = await this.ai.models.generateContent({
@@ -632,7 +544,7 @@ Explanation: The model could redefine how companies operate, enabling agile, res
 
     if (slideNumber === 1 || !styleReferenceImageUrl) {
       // First slide - no style reference
-      prompt = `Generate an infographic for a YouTube Podcast with the title ${videoTitle} from ${channelName}. This is the content for the slide ${slideNumber}/${totalSlides} : ${heading} + ${explanation}.`;
+      prompt = `Generate an infographic for a YouTube Podcast with the title ${videoTitle} from ${channelName}. This is the content for the slide ${heading} + ${explanation}.`;
 
       contents = prompt;
     } else {
@@ -646,7 +558,7 @@ Explanation: The model could redefine how companies operate, enabling agile, res
         const imageData = fs.readFileSync(styleImagePath);
         const base64Image = imageData.toString("base64");
 
-        prompt = `Generate an infographic for a YouTube Podcast with the title ${videoTitle} from ${channelName}. This is the content for the slide ${slideNumber}/${totalSlides} : ${heading} + ${explanation}. Follow the design style as per the image attached`;
+        prompt = `Generate an infographic for a YouTube Podcast with the title ${videoTitle} from ${channelName}. This is the content for the slide ${heading} + ${explanation}. Follow the design style as per the image attached`;
 
         contents = [
           { text: prompt },
@@ -659,7 +571,7 @@ Explanation: The model could redefine how companies operate, enabling agile, res
         ];
       } else {
         // Fallback if style reference image not found
-        prompt = `Generate an infographic for a YouTube Podcast with the title ${videoTitle} from ${channelName}. This is the content for the slide ${slideNumber}/${totalSlides} : ${heading} + ${explanation}.`;
+        prompt = `Generate an infographic for a YouTube Podcast with the title ${videoTitle} from ${channelName}. This is the content for the slide ${heading} + ${explanation}.`;
 
         contents = prompt;
       }
