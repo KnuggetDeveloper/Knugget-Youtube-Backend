@@ -479,10 +479,6 @@ export class CarouselService {
           explanation = match[1].trim();
           // Remove trailing newlines and clean up
           explanation = explanation.replace(/\n\s*\n\s*Slide.*$/is, "").trim();
-
-          // Remove markdown bolding (**) and other common markdown artifacts
-          explanation = explanation.replace(/\*\*/g, "").replace(/__/g, "");
-
           if (explanation) break;
         }
       }
