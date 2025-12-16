@@ -59,7 +59,8 @@ model User {
   openaiUsage            OpenAIUsage[]
   tokenUsage             TokenUsage[]
   imageGenerationUsage   ImageGenerationUsage[]
-  carouselSlides         CarouselSlide[]
+  linkedinPosts          LinkedinPost[]
+  websiteSummaries       WebsiteSummary[]
   @@map("users")
 }
 
@@ -265,37 +266,76 @@ model ImageGenerationUsage {
   @@map("image_generation_usage")
 }
 
-model CarouselSlide {
-  id        String @id @default(cuid())
-  summaryId String
-  userId    String
+model LinkedinPost {
+  id             String  @id @default(cuid())
+  userId         String
+  linkedinPostId String? // Original LinkedIn post ID if available
+  title          String? // Optional title for the post
+  content        String  @db.Text // Post content
+  author         String  // Post author name
+  authorUrl      String? // Author's LinkedIn profile URL
+  authorImage    String? // Author's profile image URL
+  postUrl        String  // URL to the original post
+  imageUrl       String? // Post image if any
+  platform       String  @default("linkedin")
 
-  // Slide information
-  slideNumber Int     // 1-15
-  heading     String  // Action-oriented title
-  explanation String  // Detailed key note content
-  imageUrl    String? // Path to generated image
+  // Engagement metrics
+  engagement Json? // { likes: number, comments: number, shares: number }
 
-  // Token usage for this slide
-  inputTokens  Int @default(0)
-  outputTokens Int @default(0)
-  totalTokens  Int @default(0)
-
-  // Status
-  status       String  @default("pending") // 'pending', 'generating', 'completed', 'failed'
-  errorMessage String?
+  // Additional metadata
+  metadata Json? // { timestamp: string, source: string, etc }
 
   // Timestamps
+  savedAt   DateTime @default(now()) // When user saved this
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Indexes
-  @@unique([summaryId, slideNumber])
-  @@index([summaryId])
+  // Indexes for performance
+  @@unique([userId, postUrl]) // Prevent duplicate saves
   @@index([userId])
-  @@map("carousel_slides")
+  @@index([savedAt])
+  @@index([author])
+  @@map("linkedin_posts")
+}
+
+model WebsiteSummary {
+  id          String   @id @default(cuid())
+  userId      String
+  url         String   // Original website URL
+  title       String   // Page title
+  content     String   @db.Text // Original content (truncated if too long)
+  summary     String   @db.Text // AI-generated summary
+  keyPoints   String[] @default([]) // Key points extracted
+  tags        String[] @default([]) // Generated tags
+  websiteName String?  // Extracted website/domain name
+  favicon     String?  // Website favicon URL
+
+  // Metadata
+  wordCount    Int? // Original content word count
+  readTime     Int? // Estimated read time in minutes
+  author       String? // Article author if detected
+  publishedAt  DateTime? // Article publish date if detected
+
+  // Status
+  status       String  @default("COMPLETED") // 'PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'
+  errorMessage String?
+
+  // Timestamps
+  savedAt   DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes for performance
+  @@unique([userId, url]) // Prevent duplicate summaries for same URL
+  @@index([userId])
+  @@index([savedAt])
+  @@index([url])
+  @@map("website_summaries")
 }
 

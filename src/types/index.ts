@@ -384,6 +384,146 @@ export interface PaymentWebhookDto {
   signature: string;
 }
 
+// LinkedIn Types
+export interface LinkedinPostData {
+  id: string;
+  linkedinPostId?: string | null;
+  title?: string | null;
+  content: string;
+  author: string;
+  authorUrl?: string | null;
+  authorImage?: string | null;
+  postUrl: string;
+  imageUrl?: string | null;
+  platform: string;
+  engagement?: {
+    likes?: number;
+    comments?: number;
+    shares?: number;
+  };
+  metadata?: {
+    timestamp?: string;
+    source?: string;
+    [key: string]: any;
+  };
+  savedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SaveLinkedinPostDto {
+  title?: string;
+  content: string;
+  author: string;
+  authorUrl?: string;
+  authorImage?: string;
+  postUrl: string;
+  imageUrl?: string;
+  linkedinPostId?: string;
+  platform?: string;
+  engagement?: {
+    likes?: number;
+    comments?: number;
+    shares?: number;
+  };
+  metadata?: {
+    timestamp?: string;
+    source?: string;
+    [key: string]: any;
+  };
+}
+
+export interface UpdateLinkedinPostDto {
+  title?: string;
+  content?: string;
+  author?: string;
+  engagement?: {
+    likes?: number;
+    comments?: number;
+    shares?: number;
+  };
+  metadata?: {
+    timestamp?: string;
+    source?: string;
+    [key: string]: any;
+  };
+}
+
+export interface LinkedinPostQueryParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  author?: string;
+  startDate?: string;
+  endDate?: string;
+  sortBy?: "savedAt" | "createdAt" | "author" | "title";
+  sortOrder?: "asc" | "desc";
+}
+
+export interface LinkedinPostStats {
+  totalPosts: number;
+  postsThisMonth: number;
+  postsThisWeek: number;
+  topAuthors: { author: string; count: number }[];
+  recentPosts: {
+    id: string;
+    title: string;
+    author: string;
+    savedAt: string;
+  }[];
+}
+
+// Website Summary Types
+export interface WebsiteSummaryData {
+  id: string;
+  url: string;
+  title: string;
+  content: string;
+  summary: string;
+  keyPoints: string[];
+  tags: string[];
+  websiteName?: string | null;
+  favicon?: string | null;
+  wordCount?: number | null;
+  readTime?: number | null;
+  author?: string | null;
+  publishedAt?: Date | null;
+  status: string;
+  savedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateWebsiteSummaryDto {
+  url: string;
+  title: string;
+  content: string;
+  author?: string;
+  publishedAt?: string;
+}
+
+export interface WebsiteSummaryQueryParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+  sortBy?: "savedAt" | "createdAt" | "title";
+  sortOrder?: "asc" | "desc";
+}
+
+export interface WebsiteSummaryStats {
+  totalSummaries: number;
+  summariesThisMonth: number;
+  topWebsites: { website: string; count: number }[];
+  recentSummaries: {
+    id: string;
+    title: string;
+    websiteName: string;
+    savedAt: string;
+  }[];
+}
+
 // Re-export Prisma types
 export {
   User,
@@ -392,4 +532,6 @@ export {
   Summary,
   RefreshToken,
   VideoMetadata as PrismaVideoMetadata,
+  LinkedinPost,
+  WebsiteSummary,
 } from "@prisma/client";
