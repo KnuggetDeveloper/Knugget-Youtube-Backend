@@ -2,8 +2,6 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import { logger } from "../config/logger";
 import { AppError } from "../middleware/errorHandler";
-import { openaiService } from "./openai";
-import { tokenService } from "./token";
 import {
   ServiceResponse,
   PaginatedResponse,
@@ -14,8 +12,8 @@ import {
 } from "../types";
 
 export class WebsiteSummaryService {
-  // Create or get existing website summary
-  async createOrGetSummary(
+  // Create or get existing website article
+  async createOrGetArticle(
     userId: string,
     data: CreateWebsiteSummaryDto
   ): Promise<ServiceResponse<WebsiteSummaryData>> {
@@ -23,8 +21,8 @@ export class WebsiteSummaryService {
       // Normalize URL for comparison
       const normalizedUrl = this.normalizeUrl(data.url);
 
-      // Check if summary already exists
-      const existingSummary = await prisma.websiteSummary.findUnique({
+      // Check if article already exists
+      const existingArticle = await prisma.websiteSummary.findUnique({
         where: {
           userId_url: {
             userId,
@@ -33,94 +31,73 @@ export class WebsiteSummaryService {
         },
       });
 
-      if (existingSummary) {
-        logger.info("Returning existing website summary", {
+      if (existingArticle) {
+        logger.info("Returning existing saved article", {
           userId,
           url: normalizedUrl,
         });
         return {
           success: true,
-          data: this.formatSummary(existingSummary),
+          data: this.formatArticle(existingArticle),
         };
       }
 
-      // Check token availability
-      const estimatedTokens = Math.ceil(data.content.length / 4); // rough estimate
-      const tokenStatus = await tokenService.checkTokenAvailability(
-        userId,
-        estimatedTokens,
-        500 // estimated output tokens
-      );
-
-      if (!tokenStatus.success || !tokenStatus.data?.hasEnoughTokens) {
-        throw new AppError(
-          "Insufficient tokens for summarization. Please upgrade your plan.",
-          402
-        );
-      }
-
-      // Generate summary using OpenAI
-      const summaryResult = await this.generateSummary(data.content, data.title);
-
-      if (!summaryResult.success || !summaryResult.data) {
-        throw new AppError(
-          summaryResult.error || "Failed to generate summary",
-          500
-        );
-      }
-
       // Calculate metadata
-      const wordCount = data.content.split(/\s+/).length;
-      const readTime = Math.ceil(wordCount / 200); // Average reading speed
+      const wordCount = data.textContent 
+        ? data.textContent.split(/\s+/).length
+        : data.content.replace(/<[^>]*>/g, '').split(/\s+/).length;
+      const readTime = Math.ceil(wordCount / 200); // Average reading speed: 200 words per minute
 
-      // Extract website name and favicon
-      const websiteName = this.extractWebsiteName(data.url);
+      // Extract website name and favicon (use provided or generate)
+      const websiteName = data.websiteName || this.extractWebsiteName(data.url);
       const favicon = this.generateFaviconUrl(data.url);
 
-      // Create summary in database
-      const summary = await prisma.websiteSummary.create({
+      // Create article in database (NO AI processing, just save the Readability data)
+      const article = await prisma.websiteSummary.create({
         data: {
           userId,
           url: normalizedUrl,
           title: data.title,
-          content: data.content.substring(0, 50000), // Limit stored content
-          summary: summaryResult.data.summary,
-          keyPoints: summaryResult.data.keyPoints,
-          tags: summaryResult.data.tags,
+          content: data.content, // Clean HTML from Readability
+          textContent: data.textContent || null, // Plain text from Readability
+          excerpt: data.excerpt || null, // Short excerpt from Readability
+          byline: data.byline || null, // Author from Readability
           websiteName,
           favicon,
+          platform: "website",
           wordCount,
           readTime,
-          author: data.author,
-          publishedAt: data.publishedAt ? new Date(data.publishedAt) : null,
-          status: "COMPLETED",
+          language: data.language || null,
+          direction: data.direction || null,
+          publishedTime: data.publishedTime || null,
         },
       });
 
-      logger.info("Website summary created successfully", {
+      logger.info("Website article saved successfully", {
         userId,
-        summaryId: summary.id,
+        articleId: article.id,
         url: normalizedUrl,
+        wordCount,
       });
 
       return {
         success: true,
-        data: this.formatSummary(summary),
+        data: this.formatArticle(article),
       };
     } catch (error) {
-      logger.error("Failed to create website summary", {
+      logger.error("Failed to save website article", {
         error: error instanceof Error ? error.message : "Unknown error",
         userId,
         url: data.url,
       });
       throw error instanceof AppError
         ? error
-        : new AppError("Failed to create website summary", 500);
+        : new AppError("Failed to save website article", 500);
     }
   }
 
-  // Get user's website summaries with pagination
-  async getSummaries(
+  // Get user's saved articles with pagination
+  async getArticles(
     userId: string,
     params: WebsiteSummaryQueryParams = {}
   ): Promise<ServiceResponse<PaginatedResponse<WebsiteSummaryData>>> {
@@ -148,7 +125,8 @@ export class WebsiteSummaryService {
         ...(search && {
           OR: [
             { title: { contains: search, mode: "insensitive" } },
-            { summary: { contains: search, mode: "insensitive" } },
+            { textContent: { contains: search, mode: "insensitive" } },
+            { excerpt: { contains: search, mode: "insensitive" } },
             { websiteName: { contains: search, mode: "insensitive" } },
           ],
         }),
@@ -157,8 +135,8 @@ export class WebsiteSummaryService {
       // Get total count
       const total = await prisma.websiteSummary.count({ where });
 
-      // Get summaries
-      const summaries = await prisma.websiteSummary.findMany({
+      // Get articles
+      const articles = await prisma.websiteSummary.findMany({
         where,
         orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
@@ -168,7 +146,7 @@ export class WebsiteSummaryService {
       const totalPages = Math.ceil(total / limit);
 
       const response: PaginatedResponse<WebsiteSummaryData> = {
-        data: summaries.map((s) => this.formatSummary(s)),
+        data: articles.map((a) => this.formatArticle(a)),
         pagination: {
           page,
           limit,
@@ -181,56 +159,56 @@ export class WebsiteSummaryService {
 
       return { success: true, data: response };
     } catch (error) {
-      logger.error("Failed to get website summaries", {
+      logger.error("Failed to get saved articles", {
         error: error instanceof Error ? error.message : "Unknown error",
         userId,
         params,
       });
-      throw new AppError("Failed to get website summaries", 500);
+      throw new AppError("Failed to get saved articles", 500);
     }
   }
 
-  // Get summary by ID
-  async getSummaryById(
+  // Get article by ID
+  async getArticleById(
     userId: string,
-    summaryId: string
+    articleId: string
   ): Promise<ServiceResponse<WebsiteSummaryData>> {
     try {
-      const summary = await prisma.websiteSummary.findFirst({
+      const article = await prisma.websiteSummary.findFirst({
         where: {
-          id: summaryId,
+          id: articleId,
           userId,
         },
       });
 
-      if (!summary) {
-        throw new AppError("Website summary not found", 404);
+      if (!article) {
+        throw new AppError("Article not found", 404);
       }
 
       return {
         success: true,
-        data: this.formatSummary(summary),
+        data: this.formatArticle(article),
       };
     } catch (error) {
-      logger.error("Failed to get website summary", {
+      logger.error("Failed to get article", {
         error: error instanceof Error ? error.message : "Unknown error",
         userId,
-        summaryId,
+        articleId,
       });
       throw error instanceof AppError
         ? error
-        : new AppError("Failed to get website summary", 500);
+        : new AppError("Failed to get article", 500);
     }
   }
 
-  // Get summary by URL
-  async getSummaryByUrl(
+  // Get article by URL
+  async getArticleByUrl(
     userId: string,
     url: string
   ): Promise<ServiceResponse<WebsiteSummaryData | null>> {
     try {
       const normalizedUrl = this.normalizeUrl(url);
-      const summary = await prisma.websiteSummary.findUnique({
+      const article = await prisma.websiteSummary.findUnique({
         where: {
           userId_url: {
             userId,
@@ -241,58 +219,58 @@ export class WebsiteSummaryService {
 
       return {
         success: true,
-        data: summary ? this.formatSummary(summary) : null,
+        data: article ? this.formatArticle(article) : null,
       };
     } catch (error) {
-      logger.error("Failed to get website summary by URL", {
+      logger.error("Failed to get article by URL", {
         error: error instanceof Error ? error.message : "Unknown error",
         userId,
         url,
       });
-      throw new AppError("Failed to get website summary", 500);
+      throw new AppError("Failed to get article", 500);
     }
   }
 
-  // Delete a website summary
-  async deleteSummary(
+  // Delete a saved article
+  async deleteArticle(
     userId: string,
-    summaryId: string
+    articleId: string
   ): Promise<ServiceResponse<void>> {
     try {
-      const summary = await prisma.websiteSummary.findFirst({
+      const article = await prisma.websiteSummary.findFirst({
         where: {
-          id: summaryId,
+          id: articleId,
           userId,
         },
       });
 
-      if (!summary) {
-        throw new AppError("Website summary not found", 404);
+      if (!article) {
+        throw new AppError("Article not found", 404);
       }
 
       await prisma.websiteSummary.delete({
-        where: { id: summaryId },
+        where: { id: articleId },
       });
 
-      logger.info("Website summary deleted", {
+      logger.info("Article deleted", {
         userId,
-        summaryId,
+        articleId,
       });
 
       return { success: true };
     } catch (error) {
-      logger.error("Failed to delete website summary", {
+      logger.error("Failed to delete article", {
         error: error instanceof Error ? error.message : "Unknown error",
         userId,
-        summaryId,
+        articleId,
       });
       throw error instanceof AppError
         ? error
-        : new AppError("Failed to delete website summary", 500);
+        : new AppError("Failed to delete article", 500);
     }
   }
 
-  // Get website summary statistics
+  // Get website article statistics
   async getStats(
     userId: string
   ): Promise<ServiceResponse<WebsiteSummaryStats>> {
@@ -300,7 +278,7 @@ export class WebsiteSummaryService {
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      const [totalSummaries, summariesThisMonth, topWebsites, recentSummaries] =
+      const [totalArticles, articlesThisMonth, topWebsites, recentArticles] =
         await Promise.all([
           prisma.websiteSummary.count({
             where: { userId },
@@ -334,110 +312,50 @@ export class WebsiteSummaryService {
       return {
         success: true,
         data: {
-          totalSummaries,
-          summariesThisMonth,
+          totalArticles,
+          articlesThisMonth,
           topWebsites: topWebsites.map((w) => ({
             website: w.websiteName || "Unknown",
             count: w._count.websiteName,
           })),
-          recentSummaries: recentSummaries.map((s) => ({
-            id: s.id,
-            title: s.title,
-            websiteName: s.websiteName || "Unknown",
-            savedAt: s.savedAt.toISOString(),
+          recentArticles: recentArticles.map((a) => ({
+            id: a.id,
+            title: a.title,
+            websiteName: a.websiteName || "Unknown",
+            savedAt: a.savedAt.toISOString(),
           })),
         },
       };
     } catch (error) {
-      logger.error("Failed to get website summary stats", {
+      logger.error("Failed to get article stats", {
         error: error instanceof Error ? error.message : "Unknown error",
         userId,
       });
-      throw new AppError("Failed to get website summary statistics", 500);
+      throw new AppError("Failed to get article statistics", 500);
     }
   }
 
-  // Generate summary using OpenAI
-  private async generateSummary(
-    content: string,
-    title: string
-  ): Promise<
-    ServiceResponse<{ summary: string; keyPoints: string[]; tags: string[] }>
-  > {
-    try {
-      const systemPrompt = `You are an expert article summarizer. Your task is to analyze articles and provide concise, accurate summaries with key points and tags. Always respond in valid JSON format.`;
-      
-      const userPrompt = `Summarize the following article titled "${title}". 
-      
-Article content:
-${content.substring(0, 15000)}
-
-Please provide:
-1. A comprehensive summary (2-3 paragraphs)
-2. 5-7 key points as bullet points
-3. 3-5 relevant tags
-
-Format your response as JSON:
-{
-  "summary": "...",
-  "keyPoints": ["point1", "point2", ...],
-  "tags": ["tag1", "tag2", ...]
-}`;
-
-      const response = await openaiService.generateCompletion({
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        maxTokens: 2000,
-        temperature: 0.5,
-      });
-
-      if (!response.success || !response.data) {
-        throw new Error(response.error || "Failed to generate summary");
-      }
-
-      const parsed = JSON.parse(response.data.content);
-
-      return {
-        success: true,
-        data: {
-          summary: parsed.summary || "",
-          keyPoints: parsed.keyPoints || [],
-          tags: parsed.tags || [],
-        },
-      };
-    } catch (error) {
-      logger.error("Failed to generate summary with OpenAI", {
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-      return {
-        success: false,
-        error: "Failed to generate summary",
-      };
-    }
-  }
-
-  // Format summary for API response
-  private formatSummary(summary: any): WebsiteSummaryData {
+  // Format article for API response
+  private formatArticle(article: any): WebsiteSummaryData {
     return {
-      id: summary.id,
-      url: summary.url,
-      title: summary.title,
-      content: summary.content,
-      summary: summary.summary,
-      keyPoints: summary.keyPoints,
-      tags: summary.tags,
-      websiteName: summary.websiteName,
-      favicon: summary.favicon,
-      wordCount: summary.wordCount,
-      readTime: summary.readTime,
-      author: summary.author,
-      publishedAt: summary.publishedAt,
-      status: summary.status,
-      savedAt: summary.savedAt,
-      createdAt: summary.createdAt,
-      updatedAt: summary.updatedAt,
+      id: article.id,
+      url: article.url,
+      title: article.title,
+      content: article.content,
+      textContent: article.textContent,
+      excerpt: article.excerpt,
+      byline: article.byline,
+      websiteName: article.websiteName,
+      favicon: article.favicon,
+      platform: article.platform,
+      wordCount: article.wordCount,
+      readTime: article.readTime,
+      language: article.language,
+      direction: article.direction,
+      publishedTime: article.publishedTime,
+      savedAt: article.savedAt,
+      createdAt: article.createdAt,
+      updatedAt: article.updatedAt,
     };
   }
 
@@ -482,4 +400,3 @@ Format your response as JSON:
 }
 
 export const websiteSummaryService = new WebsiteSummaryService();
-

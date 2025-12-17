@@ -473,22 +473,23 @@ export interface LinkedinPostStats {
   }[];
 }
 
-// Website Summary Types
+// Website Summary Types (Readability-based, no AI processing)
 export interface WebsiteSummaryData {
   id: string;
   url: string;
   title: string;
-  content: string;
-  summary: string;
-  keyPoints: string[];
-  tags: string[];
+  content: string; // Clean HTML content from Readability
+  textContent?: string | null; // Plain text version from Readability
+  excerpt?: string | null; // Short excerpt from Readability
+  byline?: string | null; // Author from Readability
   websiteName?: string | null;
   favicon?: string | null;
+  platform: string;
   wordCount?: number | null;
   readTime?: number | null;
-  author?: string | null;
-  publishedAt?: Date | null;
-  status: string;
+  language?: string | null;
+  direction?: string | null;
+  publishedTime?: string | null;
   savedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -497,9 +498,14 @@ export interface WebsiteSummaryData {
 export interface CreateWebsiteSummaryDto {
   url: string;
   title: string;
-  content: string;
-  author?: string;
-  publishedAt?: string;
+  content: string; // Clean HTML from Readability
+  textContent?: string; // Plain text from Readability
+  excerpt?: string; // Short excerpt from Readability
+  byline?: string; // Author from Readability
+  websiteName?: string; // Site name from Readability
+  language?: string; // Language from Readability
+  direction?: string; // Text direction from Readability
+  publishedTime?: string; // Published time from Readability
 }
 
 export interface WebsiteSummaryQueryParams {
@@ -513,10 +519,10 @@ export interface WebsiteSummaryQueryParams {
 }
 
 export interface WebsiteSummaryStats {
-  totalSummaries: number;
-  summariesThisMonth: number;
+  totalArticles: number;
+  articlesThisMonth: number;
   topWebsites: { website: string; count: number }[];
-  recentSummaries: {
+  recentArticles: {
     id: string;
     title: string;
     websiteName: string;

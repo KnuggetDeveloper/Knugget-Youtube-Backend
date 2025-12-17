@@ -56,7 +56,7 @@ export class WebsiteSummaryController {
         contentLength: summaryData.content.length,
       });
 
-      const result = await websiteSummaryService.createOrGetSummary(
+      const result = await websiteSummaryService.createOrGetArticle(
         req.user.id,
         summaryData
       );
@@ -64,7 +64,7 @@ export class WebsiteSummaryController {
       const response: ApiResponse = {
         success: true,
         data: result.data,
-        message: "Website summary created successfully",
+        message: "Article saved successfully",
       };
 
       res.status(201).json(response);
@@ -101,7 +101,7 @@ export class WebsiteSummaryController {
         sortOrder: (req.query.sortOrder as any) || "desc",
       };
 
-      const result = await websiteSummaryService.getSummaries(
+      const result = await websiteSummaryService.getArticles(
         req.user.id,
         queryParams
       );
@@ -128,7 +128,7 @@ export class WebsiteSummaryController {
 
       const { id } = req.params;
 
-      const result = await websiteSummaryService.getSummaryById(
+      const result = await websiteSummaryService.getArticleById(
         req.user.id,
         id
       );
@@ -163,7 +163,7 @@ export class WebsiteSummaryController {
         return res.status(400).json(response);
       }
 
-      const result = await websiteSummaryService.getSummaryByUrl(
+      const result = await websiteSummaryService.getArticleByUrl(
         req.user.id,
         url
       );
@@ -190,16 +190,16 @@ export class WebsiteSummaryController {
 
       const { id } = req.params;
 
-      await websiteSummaryService.deleteSummary(req.user.id, id);
+      await websiteSummaryService.deleteArticle(req.user.id, id);
 
       const response: ApiResponse = {
         success: true,
-        message: "Website summary deleted successfully",
+        message: "Article deleted successfully",
       };
 
-      logger.info("Website summary deleted", {
+      logger.info("Article deleted", {
         userId: req.user.id,
-        summaryId: id,
+        articleId: id,
       });
 
       res.json(response);
@@ -226,13 +226,13 @@ export class WebsiteSummaryController {
     res.json(response);
   });
 
-  // Health check for website summarization
+  // Health check for website article saving
   healthCheck = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
     const response: ApiResponse = {
       success: true,
       data: {
         status: "healthy",
-        service: "website-summarization",
+        service: "website-articles",
         timestamp: new Date().toISOString(),
       },
     };

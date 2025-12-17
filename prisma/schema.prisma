@@ -305,23 +305,21 @@ model WebsiteSummary {
   id          String   @id @default(cuid())
   userId      String
   url         String   // Original website URL
-  title       String   // Page title
-  content     String   @db.Text // Original content (truncated if too long)
-  summary     String   @db.Text // AI-generated summary
-  keyPoints   String[] @default([]) // Key points extracted
-  tags        String[] @default([]) // Generated tags
-  websiteName String?  // Extracted website/domain name
+  title       String   // Page title from Readability
+  content     String   @db.Text // Clean HTML content from Readability
+  textContent String?  @db.Text // Plain text version from Readability
+  excerpt     String?  @db.Text // Short excerpt from Readability
+  byline      String?  // Author from Readability (e.g., "By John Doe")
+  websiteName String?  // Site name from Readability
   favicon     String?  // Website favicon URL
+  platform    String   @default("website")
 
   // Metadata
-  wordCount    Int? // Original content word count
-  readTime     Int? // Estimated read time in minutes
-  author       String? // Article author if detected
-  publishedAt  DateTime? // Article publish date if detected
-
-  // Status
-  status       String  @default("COMPLETED") // 'PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'
-  errorMessage String?
+  wordCount    Int? // Word count from Readability
+  readTime     Int? // Estimated read time in minutes (length / 1000 chars)
+  language     String? // Content language from Readability
+  direction    String? // Text direction (ltr/rtl) from Readability
+  publishedTime String? // Published time from Readability
 
   // Timestamps
   savedAt   DateTime @default(now())
@@ -332,7 +330,7 @@ model WebsiteSummary {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Indexes for performance
-  @@unique([userId, url]) // Prevent duplicate summaries for same URL
+  @@unique([userId, url]) // Prevent duplicate saves for same URL
   @@index([userId])
   @@index([savedAt])
   @@index([url])
