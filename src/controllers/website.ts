@@ -168,11 +168,24 @@ export class WebsiteSummaryController {
         url
       );
 
+      // If article not found, return 404
+      if (!result.data) {
+        const response: ApiResponse = {
+          success: false,
+          error: "Article not found",
+        };
+        // Disable caching for 404 responses
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        return res.status(404).json(response);
+      }
+
       const response: ApiResponse = {
         success: true,
         data: result.data,
       };
 
+      // Disable caching for this endpoint
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.json(response);
     }
   );
