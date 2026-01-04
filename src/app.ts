@@ -37,12 +37,12 @@ app.use(
 
       const allowedOrigins = [
         // Production domains
-        "https://www.getknugget.com",
-        "https://getknugget.com",
-        "https://knugget-youtube-client.vercel.app",
-        "https://knugget-new-client.vercel.app",
+        "https://www.getTorchKB.com",
+        "https://getTorchKB.com",
+        "https://TorchKB-youtube-client.vercel.app",
+        "https://TorchKB-new-client.vercel.app",
         "chrome-extension://",
-        "https://knugget-youtube-backend.onrender.com",
+        "https://TorchKB-youtube-backend.onrender.com",
         // Development origins
         "http://localhost:3000",
         "http://localhost:3001",
@@ -183,7 +183,7 @@ const startServer = async () => {
     logger.info("Database connected successfully");
 
     const server = app.listen(3000, () => {
-      logger.info(`🚀 Knugget API server running on port 3000`);
+      logger.info(`🚀 TorchKB API server running on port 3000`);
       logger.info(`📡 Environment: ${config.server.nodeEnv}`);
       logger.info(`🔗 API Base URL: ${config.server.apiBaseUrl}`);
       logger.info(`🌐 CORS Origins: ${config.cors.allowedOrigins.join(", ")}`);

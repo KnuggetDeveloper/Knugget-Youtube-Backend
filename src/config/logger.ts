@@ -14,7 +14,7 @@ const logFormat = winston.format.combine(
 export const logger = winston.createLogger({
   level: config.logging.level,
   format: logFormat,
-  defaultMeta: { service: "knugget-api" },
+  defaultMeta: { service: "TorchKB-api" },
   transports: [
     // Write all logs to console
     new winston.transports.Console({

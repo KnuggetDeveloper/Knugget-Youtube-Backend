@@ -62,7 +62,7 @@ router.get("/", (req, res) => {
   const response: ApiResponse = {
     success: true,
     data: {
-      name: "Knugget AI API",
+      name: "TorchKB AI API",
       version: "1.0.0",
       description:
         "AI-powered content summarization API for YouTube videos, LinkedIn posts, and website articles",
@@ -78,7 +78,7 @@ router.get("/", (req, res) => {
         website: "/api/website",
         health: "/api/health",
       },
-      documentation: "https://docs.knugget.com/api",
+      documentation: "https://docs.TorchKB.com/api",
     },
   };
 

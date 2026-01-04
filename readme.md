@@ -1,6 +1,6 @@
-# Knugget AI Backend
+# TorchKB AI Backend
 
-A production-ready backend API for Knugget AI - an AI-powered YouTube video summarization platform that serves both Chrome extension and web application clients.
+A production-ready backend API for TorchKB AI - an AI-powered YouTube video summarization platform that serves both Chrome extension and web application clients.
 
 ## 🚀 Features
 
@@ -126,7 +126,7 @@ DELETE /account           # Delete account
 
 ```bash
 git clone <repository>
-cd knugget-backend
+cd TorchKB-backend
 npm install
 ```
 
@@ -179,7 +179,7 @@ OPENAI_API_KEY="sk-your-openai-key"
 OPENAI_MODEL="gpt-4-turbo-preview"
 
 # CORS
-ALLOWED_ORIGINS="https://knugget-youtube-client.vercel.app,chrome-extension://,https://knugget-youtube-backend.onrender.com"
+ALLOWED_ORIGINS="https://TorchKB-youtube-client.vercel.app,chrome-extension://,https://TorchKB-youtube-backend.onrender.com"
 ```
 
 ## 🤖 AI Summary Generation
@@ -295,7 +295,7 @@ The API supports extensive configuration through environment variables:
 
 ## 🚀 Chrome Extension Integration
 
-The API is specifically designed to work with the Knugget Chrome extension:
+The API is specifically designed to work with the TorchKB Chrome extension:
 
 - **CORS**: Supports `chrome-extension://` origins
 - **Authentication**: Compatible with extension auth flows
@@ -320,4 +320,4 @@ This project is licensed under the MIT License.
 
 ---
 
-Built with ❤️ for the Knugget AI ecosystem
+Built with ❤️ for the TorchKB AI ecosystem

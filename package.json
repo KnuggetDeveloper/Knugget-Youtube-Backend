@@ -1,7 +1,7 @@
 {
-  "name": "knugget-backend",
+  "name": "TorchKB-backend",
   "version": "1.0.0",
-  "description": "Knugget AI Backend - YouTube Video Summarization API",
+  "description": "TorchKB AI Backend - YouTube Video Summarization API",
   "main": "dist/app.js",
   "scripts": {
     "dev": "tsx watch src/app.ts",
@@ -25,7 +25,7 @@
     "openai",
     "firebase"
   ],
-  "author": "Knugget AI",
+  "author": "TorchKB AI",
   "license": "MIT",
   "dependencies": {
     "@google/genai": "^1.30.0",

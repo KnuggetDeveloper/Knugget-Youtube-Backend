@@ -11,7 +11,7 @@ const configSchema = z.object({
   API_BASE_URL: z
     .string()
     .url()
-    .default("https://knugget-youtube-backend.onrender.com/api"),
+    .default("https://TorchKB-youtube-backend.onrender.com/api"),
 
   // Database
   DATABASE_URL: z.string().min(1),
@@ -31,12 +31,12 @@ const configSchema = z.object({
   DODO_BASE_URL: z.string().url().default("https://live.dodopayments.com"),
   DODO_WEBHOOK_SECRET: z.string().min(1).optional(),
   DODO_PAYMENTS_ENVIRONMENT: z.string().default("live_mode"),
-  PRODUCT_ID_LITE: z.string().min(1), // Knugget Lite plan product ID
-  PRODUCT_ID_PRO: z.string().min(1), // Knugget Pro plan product ID
+  PRODUCT_ID_LITE: z.string().min(1), // TorchKB Lite plan product ID
+  PRODUCT_ID_PRO: z.string().min(1), // TorchKB Pro plan product ID
   FRONTEND_URL: z
     .string()
     .url()
-    .default("https://knugget-youtube-client.vercel.app"),
+    .default("https://TorchKB-youtube-client.vercel.app"),
 
   // Email (Optional)
   SMTP_HOST: z.string().optional(),
@@ -50,7 +50,7 @@ const configSchema = z.object({
   ALLOWED_ORIGINS: z
     .string()
     .default(
-      "https://www.getknugget.com,https://getknugget.com,https://knugget-youtube-client.vercel.app,chrome-extension://,https://knugget-youtube-backend.onrender.com"
+      "https://www.getTorchKB.com,https://getTorchKB.com,https://TorchKB-youtube-client.vercel.app,chrome-extension://,https://TorchKB-youtube-backend.onrender.com"
     ),
 
   // Logging
