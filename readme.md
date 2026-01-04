@@ -179,7 +179,7 @@ OPENAI_API_KEY="sk-your-openai-key"
 OPENAI_MODEL="gpt-4-turbo-preview"
 
 # CORS
-ALLOWED_ORIGINS="https://TorchKB-youtube-client.vercel.app,chrome-extension://,https://TorchKB-youtube-backend.onrender.com"
+ALLOWED_ORIGINS="https://knugget-youtube-client.vercel.app/,chrome-extension://,https://knugget-youtube-backend.onrender.com"
 ```
 
 ## 🤖 AI Summary Generation

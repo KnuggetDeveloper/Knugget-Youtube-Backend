@@ -11,7 +11,7 @@ const configSchema = z.object({
   API_BASE_URL: z
     .string()
     .url()
-    .default("https://TorchKB-youtube-backend.onrender.com/api"),
+    .default("https://knugget-youtube-backend.onrender.com/api"),
 
   // Database
   DATABASE_URL: z.string().min(1),
@@ -36,7 +36,7 @@ const configSchema = z.object({
   FRONTEND_URL: z
     .string()
     .url()
-    .default("https://TorchKB-youtube-client.vercel.app"),
+    .default("https://knugget-youtube-client.vercel.app/"),
 
   // Email (Optional)
   SMTP_HOST: z.string().optional(),
@@ -50,7 +50,7 @@ const configSchema = z.object({
   ALLOWED_ORIGINS: z
     .string()
     .default(
-      "https://www.getTorchKB.com,https://getTorchKB.com,https://TorchKB-youtube-client.vercel.app,chrome-extension://,https://TorchKB-youtube-backend.onrender.com"
+      "https://www.getknugget.com,https://getknugget.com,https://knugget-youtube-client.vercel.app/,chrome-extension://,https://knugget-youtube-backend.onrender.com"
     ),
 
   // Logging

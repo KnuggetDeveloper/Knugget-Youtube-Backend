@@ -37,12 +37,12 @@ app.use(
 
       const allowedOrigins = [
         // Production domains
-        "https://www.getTorchKB.com",
+        "hhttps://www.getknugget.com",
         "https://getTorchKB.com",
-        "https://TorchKB-youtube-client.vercel.app",
-        "https://TorchKB-new-client.vercel.app",
+        "https://knugget-youtube-client.vercel.app/",
+        "https://knugget-youtube-client.vercel.app",
         "chrome-extension://",
-        "https://TorchKB-youtube-backend.onrender.com",
+        "https://knugget-youtube-backend.onrender.com",
         // Development origins
         "http://localhost:3000",
         "http://localhost:3001",
