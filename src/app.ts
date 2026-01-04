@@ -37,8 +37,8 @@ app.use(
 
       const allowedOrigins = [
         // Production domains
-        "https://www.getknugget.com",
-        "https://getknugget.com",
+        "https://www.torchkb.com/",
+        "https://torchkb.com",
         "https://knugget-youtube-client.vercel.app/",
         "https://knugget-youtube-client.vercel.app",
         "chrome-extension://",
