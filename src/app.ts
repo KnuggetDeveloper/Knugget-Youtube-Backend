@@ -37,8 +37,8 @@ app.use(
 
       const allowedOrigins = [
         // Production domains
-        "hhttps://www.getknugget.com",
-        "https://getTorchKB.com",
+        "https://www.getknugget.com",
+        "https://getknugget.com",
         "https://knugget-youtube-client.vercel.app/",
         "https://knugget-youtube-client.vercel.app",
         "chrome-extension://",
@@ -52,16 +52,23 @@ app.use(
         "http://127.0.0.1:8000",
       ];
 
+      // Normalize origin (remove trailing slash for comparison)
+      const normalizedOrigin = origin.trim().replace(/\/$/, "");
+
       // Check if origin is in allowed list or is chrome-extension
-      if (
-        allowedOrigins.some(
-          (allowedOrigin) =>
-            origin === allowedOrigin ||
-            origin.startsWith(allowedOrigin) ||
-            (allowedOrigin === "chrome-extension://" &&
-              origin.startsWith("chrome-extension://"))
-        )
-      ) {
+      const isAllowed = allowedOrigins.some((allowedOrigin) => {
+        const normalizedAllowed = allowedOrigin.trim().replace(/\/$/, "");
+
+        // Special case for chrome-extension (allow any extension ID)
+        if (allowedOrigin === "chrome-extension://") {
+          return normalizedOrigin.startsWith("chrome-extension://");
+        }
+
+        // Exact match for regular domains
+        return normalizedOrigin === normalizedAllowed;
+      });
+
+      if (isAllowed) {
         return callback(null, true);
       }
 
